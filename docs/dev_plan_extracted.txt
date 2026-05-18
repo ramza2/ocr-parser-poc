@@ -1,0 +1,388 @@
+OCR 파서 검증 PoC 개발 기획서
+PDF·이미지 기반 OCR/문서 파서 자체개발 가능성 검토용
+문서 목적
+본 문서는 완성형 OCR 솔루션 개발이 아니라, 내부 개발 가능성을 빠르게 검증하기 위한 단일 화면 PoC 개발 방향을 정의한다. Cursor 등 AI 코딩 도구가 화면과 기능 의도를 이해할 수 있도록 기능 범위, 화면 구성, API, 데이터 구조, 개발 순서를 정리한다.
+항목
+내용
+문서명
+OCR 파서 검증 PoC 개발 기획서
+대상 시스템
+PDF·이미지 기반 OCR 파서 검증 웹 도구
+개발 목적
+파일 선택 → 파서 선택 → 실행 → 결과 확인 흐름 검증
+개발 성격
+내부 검토용 PoC / 운영 시스템 아님
+주요 사용자
+개발자, 기획자, 내부 검토자
+주요 산출물
+React 단일 화면, FastAPI API, 파서 어댑터, 실행 결과 JSON
+1. 개발 배경 및 목표
+1차 개발은 OCR 제품을 완성하는 것이 아니라, PDF와 이미지 문서를 대상으로 내부에서 OCR/파서 처리가 가능한지 빠르게 확인하는 검증 도구를 만드는 것이 목표이다.
+웹 화면에서 파일을 선택하고 파일 정보를 확인한다.
+선택한 파일 확장자에 따라 사용 가능한 파서 목록을 표시한다.
+사용자가 파서를 선택한 후 실행한다.
+텍스트, JSON, 로그, 오류, 표 결과를 한 화면에서 확인한다.
+여러 파서 결과 비교는 후순위로 두고, 1차에서는 화면 탭과 안내만 제공한다.
+개발 원칙
+Simple is best. PoC 단계에서는 로그인, DB 저장, 권한, 관리자, 문서 이력 관리, 검수 UI를 제외하고 단일 화면과 단순 API 중심으로 구현한다.
+2. 1차 개발 범위
+구분
+포함 기능
+비고
+파일 입력
+파일 선택, 파일 정보 표시
+단일 파일 업로드 기준
+파서 선택
+사용 가능 파서 목록 표시, 파서 선택
+확장자 기반 활성화
+실행
+파서 실행, 처리 결과 요약 표시
+동기 처리 우선
+결과 확인
+텍스트, JSON, 로그, 오류, 표 결과 표시
+단일 화면 탭 구성
+비교
+여러 파서 결과 비교 탭
+후순위 안내만 표시
+제외 기능
+제외 사유
+로그인/권한 관리
+내부 검토용 PoC이므로 불필요
+DB 저장
+반복 실행 이력 저장보다 파서 가능성 검증이 우선
+검수/수정 UI
+완성품 성격이 강하므로 1차 제외
+대량 배치 처리
+단일 파일 처리 결과 확인 이후 판단
+검색/RAG 연동
+OCR 결과 품질 검증 이후 별도 단계
+운영 관리자 기능
+PoC 범위 초과
+3. 대상 파일 및 파서 정의
+파일 유형
+확장자
+1차 처리 방식
+PDF
+pdf
+PDF 내부 텍스트 추출 또는 페이지 이미지 변환 후 OCR
+이미지
+jpg, jpeg, png
+이미지 OCR
+이미지
+tif, tiff
+이미지 OCR. 라이브러리 지원 여부에 따라 선택 적용
+파서 ID
+파서명
+대상
+설명
+PDF_TEXT
+PDF 텍스트 추출 파서
+PDF
+PDF 내부 텍스트 레이어를 추출한다. 스캔 PDF에서는 결과가 없을 수 있다.
+PDF_IMAGE_OCR
+PDF 이미지 OCR 파서
+PDF
+PDF 페이지를 이미지로 변환한 뒤 OCR을 수행한다.
+IMAGE_OCR
+이미지 OCR 파서
+JPG/PNG/TIFF
+이미지 파일에서 텍스트를 추출한다.
+TABLE_OCR
+표 OCR 테스트 파서
+PDF/이미지
+표 영역 및 셀 데이터 추출 가능성을 검토한다.
+AUTO
+자동 선택 파서
+PDF/이미지
+확장자와 파일 특성에 따라 기본 파서를 자동 실행한다.
+확장자
+활성화 파서
+pdf
+PDF_TEXT, PDF_IMAGE_OCR, TABLE_OCR, AUTO
+jpg/jpeg/png
+IMAGE_OCR, TABLE_OCR, AUTO
+tif/tiff
+IMAGE_OCR, TABLE_OCR, AUTO
+기타
+활성화 파서 없음. UNSUPPORTED_EXTENSION 오류 표시
+4. 전체 사용 흐름
+사용자는 하나의 화면에서 파일 선택부터 결과 확인까지 완료한다. 화면 이동, 로그인, 문서 이력 관리는 1차에서 제외한다.
+파일 선택  ↓파일 정보 표시  ↓사용 가능 파서 목록 표시  ↓파서 선택  ↓파서 실행  ↓처리 결과 요약 표시  ↓텍스트 / JSON / 로그 / 오류 / 표 결과 확인  ↓파서 비교는 후순위 탭에서 안내만 표시
+5. 화면 구성 기획
+단일 화면은 좌측 설정 패널과 우측 결과 패널로 구성한다. 좌측은 입력과 실행, 우측은 실행 결과 확인에 집중한다.
+영역
+구성 요소
+설명
+상단 헤더
+화면명, 부제, PoC Mode 배지
+현재 화면의 목적을 즉시 인지할 수 있게 한다.
+좌측 패널
+파일 선택, 파일 정보, 파서 선택, 실행/초기화 버튼
+사용자가 위에서 아래로 순서대로 조작하도록 구성한다.
+우측 상단
+처리 결과 요약 카드
+상태, 실행 시간, 페이지 수, 문자 수, 표 수, 오류 수를 표시한다.
+우측 하단
+결과 탭 영역
+텍스트, JSON, 로그, 오류, 표 결과, 파서 비교 탭을 제공한다.
+5.1 참고 UI 샘플
+아래 이미지는 UI Pilot으로 생성한 샘플 UI를 참고용으로 삽입한 것이다. 실제 개발 시 동일한 디자인을 완전히 복제하기보다는 좌측 입력 패널과 우측 결과 패널 구조를 우선 반영한다.
+6. 상세 기능 정의
+기능 ID
+기능명
+우선순위
+정의
+F-001
+파일 선택
+필수
+사용자가 웹 화면에서 로컬 PDF/이미지 파일을 선택한다.
+F-002
+파일 정보 표시
+필수
+파일명, 확장자, 파일 크기, MIME 타입을 표시한다.
+F-003
+사용 가능 파서 목록 표시
+필수
+확장자 기준으로 실행 가능한 파서 목록을 표시한다.
+F-004
+파서 선택
+필수
+사용자가 실행할 파서를 하나 선택한다.
+F-005
+파서 실행
+필수
+파일과 파서 ID를 서버로 전달하고 OCR/파싱을 수행한다.
+F-006
+처리 결과 요약 표시
+필수
+상태, 실행 시간, 페이지 수, 문자 수, 표 개수, 오류 개수를 표시한다.
+F-007
+텍스트 결과 표시
+필수
+페이지별 추출 텍스트를 표시한다.
+F-008
+JSON 결과 표시
+필수
+파서 실행 결과 원본 JSON을 코드 블록 형태로 표시한다.
+F-009
+로그 표시
+필수
+처리 단계별 INFO/WARN/ERROR 로그를 시간순으로 표시한다.
+F-010
+오류 표시
+필수
+오류 코드, 메시지, 상세 내용을 표시한다. 오류가 없으면 안내 문구를 표시한다.
+F-011
+표 결과 표시
+선택
+추출된 표 데이터를 테이블 형태로 표시한다.
+F-012
+여러 파서 결과 비교
+후순위
+1차에서는 후순위 기능 안내만 표시한다.
+7. 화면 상태 정의
+상태
+화면 표시
+설명
+초기
+선택된 파일이 없습니다.
+파일 선택 전 상태. 실행 버튼 비활성화
+파일 선택 완료
+파일 정보와 사용 가능 파서 표시
+지원 확장자인 경우 파서 선택 가능
+파서 선택 완료
+파서 실행 버튼 활성화
+사용자가 실행 가능
+처리 중
+처리 중 배지 및 로딩 표시
+중복 실행 방지를 위해 버튼 비활성화
+성공
+성공 배지, 요약 카드, 결과 탭 표시
+텍스트/JSON/로그/표 결과 확인 가능
+실패
+실패 배지, 오류 탭 강조
+오류 코드와 메시지를 표시
+8. API 설계 초안
+Method
+URL
+설명
+비고
+GET
+/api/health
+서버 상태 확인
+PoC 실행 전 확인
+GET
+/api/parsers
+사용 가능한 파서 목록 조회
+프론트 초기 로딩 시 사용
+POST
+/api/parse
+파일과 parser_id를 전달하여 파싱 실행
+multipart/form-data
+요청 예시
+POST /api/parseContent-Type: multipart/form-datafile: sample.pdfparser_id: PDF_IMAGE_OCR
+응답 예시
+{  "success": true,  "parser_id": "PDF_IMAGE_OCR",  "file_name": "sample.pdf",  "extension": "pdf",  "elapsed_ms": 3250,  "page_count": 3,  "text_length": 15230,  "table_count": 1,  "error_count": 0,  "text": "...",  "pages": [    { "page_no": 1, "text": "...", "blocks": [] }  ],  "tables": [    {      "table_id": "table_1",      "page_no": 1,      "rows": [["No", "항목명", "인식값", "신뢰도"]]    }  ],  "logs": [    { "level": "INFO", "message": "파일 업로드 완료" }  ],  "errors": []}
+9. 백엔드 개발 방향
+PoC 백엔드는 Python FastAPI 기반을 권장한다. OCR/문서 파서 라이브러리 연동이 Python 생태계에서 상대적으로 단순하며, 단일 API로 빠르게 검증하기 좋다.
+구성 요소
+역할
+FastAPI
+프론트엔드에서 파일과 파서 ID를 받아 파서 실행
+Parser Registry
+확장자와 parser_id 기준으로 실행 가능한 파서 관리
+Parser Adapter
+PDF_TEXT, PDF_IMAGE_OCR, IMAGE_OCR, TABLE_OCR 등의 공통 인터페이스 제공
+Temporary Storage
+업로드 파일을 임시 저장하고 실행 후 삭제 또는 보관 옵션 적용
+Result Formatter
+텍스트, 페이지, 표, 로그, 오류를 공통 JSON 구조로 변환
+파서 어댑터 개념
+class ParserAdapter:    parser_id: str    name: str    supported_extensions: list[str]    def parse(self, file_path: str, options: dict | None = None) -> ParseResult:        ...class ParseResult:    success: bool    parser_id: str    file_name: str    elapsed_ms: int    page_count: int | None    text: str    pages: list[PageResult]    tables: list[TableResult]    logs: list[LogItem]    errors: list[ErrorItem]
+10. 프론트엔드 개발 방향
+프론트엔드는 React + TypeScript 기반 단일 화면으로 구현한다. 디자인 도구 없이도 Cursor가 인식하기 쉽도록 컴포넌트를 명확히 분리한다.
+컴포넌트
+역할
+OcrParserPocPage
+전체 화면 컨테이너
+FileSelectPanel
+파일 선택, 파일 정보 표시
+ParserSelectPanel
+사용 가능 파서 목록 표시 및 선택
+RunControlPanel
+파서 실행, 초기화 버튼
+ResultSummaryCards
+처리 상태와 요약 지표 표시
+ResultTabs
+텍스트/JSON/로그/오류/표/비교 탭
+TextResultView
+페이지별 OCR 텍스트 표시
+JsonResultView
+JSON 코드 블록 표시
+LogResultView
+로그 레벨별 표시
+ErrorResultView
+오류 카드 표시
+TableResultView
+표 결과 표시
+프론트엔드 폴더 구조 예시
+src/  api/    parserApi.ts  components/    FileSelectPanel.tsx    ParserSelectPanel.tsx    ResultSummaryCards.tsx    ResultTabs.tsx  pages/    OcrParserPocPage.tsx  types/    parser.ts  utils/    fileUtils.ts
+11. 백엔드 폴더 구조 예시
+backend/  app/    main.py    api/      health.py      parsers.py    schemas/      parser.py    services/      parser_registry.py      parse_service.py    parsers/      base.py      pdf_text_parser.py      pdf_image_ocr_parser.py      image_ocr_parser.py      table_ocr_parser.py    utils/      file_utils.py      log_utils.py  requirements.txt  README.md
+12. 오류 코드 정의
+오류 코드
+발생 상황
+사용자 표시 메시지
+UNSUPPORTED_EXTENSION
+지원하지 않는 확장자
+지원하지 않는 파일 형식입니다.
+FILE_TOO_LARGE
+허용 용량 초과
+파일 크기가 너무 큽니다.
+PARSER_NOT_SELECTED
+파서 미선택
+실행할 파서를 선택해 주세요.
+PARSER_NOT_AVAILABLE
+선택한 파서가 해당 파일에 부적합
+선택한 파서를 사용할 수 없습니다.
+PDF_CONVERT_FAILED
+PDF 이미지 변환 실패
+PDF 이미지 변환에 실패했습니다.
+OCR_FAILED
+OCR 처리 실패
+OCR 처리 중 오류가 발생했습니다.
+EMPTY_RESULT
+추출 결과 없음
+추출된 텍스트가 없습니다.
+INTERNAL_ERROR
+알 수 없는 서버 오류
+처리 중 알 수 없는 오류가 발생했습니다.
+13. 개발 단계 계획
+단계
+작업
+완료 기준
+Step 1
+프로젝트 기본 구성
+React/FastAPI 실행 및 /api/health 확인
+Step 2
+단일 화면 UI 구현
+파일 선택, 파서 선택, 결과 탭 mock 표시
+Step 3
+파서 목록 API 구현
+/api/parsers 응답과 화면 연동
+Step 4
+PDF_TEXT 파서 구현
+텍스트 PDF에서 페이지별 텍스트 추출
+Step 5
+IMAGE_OCR 파서 구현
+JPG/PNG 이미지에서 OCR 결과 확인
+Step 6
+PDF_IMAGE_OCR 파서 구현
+스캔 PDF를 이미지 변환 후 OCR 실행
+Step 7
+TABLE_OCR 테스트 구현
+표 샘플에서 결과 JSON 또는 실패 로그 확인
+Step 8
+오류/로그/요약 정리
+성공/실패 케이스를 화면에서 구분 표시
+Step 9
+샘플 문서 검증
+파일 유형별 결과를 기록하고 자체개발 가능성 판단
+14. 검증 시나리오
+시나리오
+입력 파일
+확인 항목
+텍스트 PDF
+전자 PDF 보고서
+PDF_TEXT로 텍스트 추출 여부, 실행 시간
+스캔 PDF
+복합기 스캔 PDF
+PDF_TEXT 결과 없음 여부, PDF_IMAGE_OCR 결과 품질
+이미지 문서
+JPG/PNG 문서 이미지
+IMAGE_OCR 한글/숫자 인식 품질
+표 문서
+표가 포함된 PDF/이미지
+TABLE_OCR 표 감지 여부, 셀 데이터 추출 가능성
+오류 파일
+지원하지 않는 확장자
+UNSUPPORTED_EXTENSION 표시 여부
+판단 항목
+판단 기준
+처리 가능성
+각 파일 유형에서 최소 1개 파서가 정상 실행되는가
+결과 품질
+추출 텍스트가 사람이 확인 가능한 수준인가
+표 추출 가능성
+표 영역 또는 셀 데이터가 부분적으로라도 구조화되는가
+속도
+PoC 기준으로 문서 1건 처리 시간이 수용 가능한가
+확장성
+새 파서를 ParserAdapter 형태로 쉽게 추가할 수 있는가
+개발 난이도
+내부 개발자가 유지보수 가능한 수준인가
+15. 리스크 및 후속 과제
+리스크
+내용
+대응 방향
+OCR 정확도 편차
+스캔 품질, 해상도, 기울기, 배경 노이즈에 따라 결과 차이가 큼
+전처리 옵션을 후속 단계에서 검토
+한글 인식 품질
+엔진별 한글 인식 품질 차이가 발생할 수 있음
+여러 OCR 엔진 비교 필요
+표 구조 복원 난이도
+병합 셀, 선 없는 표, 다단 표는 정확도 확보가 어려움
+1차는 표 추출 가능성 확인으로 제한
+PDF 유형 다양성
+텍스트 PDF, 이미지 PDF, 혼합 PDF가 서로 다르게 동작
+AUTO 파서에서 fallback 흐름 검토
+처리 시간
+PDF 이미지 변환 및 OCR은 느릴 수 있음
+페이지 수 제한과 진행 상태 표시 검토
+16. Cursor 개발 지시용 요약 프롬프트
+아래 프롬프트는 Cursor에 초기 구현을 맡길 때 그대로 사용할 수 있도록 정리한 것이다.
+OCR 파서 검증 PoC 웹 도구를 구현해줘.목적:PDF 및 이미지 파일을 웹에서 선택하고, 파일 확장자에 맞는 OCR/문서 파서를 선택 실행하여 텍스트, JSON, 로그, 오류, 표 결과를 확인하는 내부 검토용 PoC이다. 운영 시스템이 아니므로 로그인, DB 저장, 권한, 관리자, 문서 이력, 검수 UI는 제외한다.기술 방향:- Frontend: React + TypeScript + Tailwind- Backend: FastAPI- 화면: 단일 페이지- API: GET /api/health, GET /api/parsers, POST /api/parse필수 기능:1. 파일 선택2. 파일 정보 표시: 파일명, 확장자, 파일 크기, MIME 타입3. 사용 가능 파서 목록 표시4. 파서 선택5. 파서 실행6. 처리 결과 요약 표시: 상태, 사용 파서, 실행 시간, 페이지 수, 추출 문자 수, 표 개수, 오류 개수7. 텍스트 결과 탭8. JSON 결과 탭9. 로그 탭10. 오류 탭11. 표 결과 탭12. 파서 비교 탭은 후순위 안내만 표시파서 ID:- PDF_TEXT- PDF_IMAGE_OCR- IMAGE_OCR- TABLE_OCR- AUTOUI 구조:좌측 360px 설정 패널에는 파일 선택, 파일 정보, 파서 목록, 파서 선택, 실행/초기화 버튼을 배치한다.우측에는 처리 결과 요약 카드와 결과 탭을 배치한다.디자인은 흰색 배경, 연한 회색 카드, 파란색 포인트 컬러를 사용한 깔끔한 개발자용 SaaS 도구 느낌으로 만든다.우선 mock 데이터로 화면을 구현한 뒤, /api/parsers와 /api/parse를 순차적으로 연동한다.
+17. 결론
+1차 개발 결론
+이번 PoC는 OCR 제품 개발이 아니라 파서 구조와 처리 가능성 검증이 핵심이다. 따라서 단일 화면, 단일 파일, 선택 파서 실행, 결과 확인 구조로 최소화한다. 이 PoC 결과를 바탕으로 실제 OCR 솔루션으로 확장할지, 어떤 OCR 엔진과 파서 전략을 채택할지 판단한다.
