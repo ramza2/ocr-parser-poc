@@ -75,7 +75,7 @@ export default function ResultSummaryCards({
         <h2 className="text-sm font-semibold text-slate-800">처리 결과 요약</h2>
         {badge}
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {cards.map((card) => (
           <div
             key={card.label}
