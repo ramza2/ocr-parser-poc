@@ -47,7 +47,9 @@ docker compose up --build
 | API (직접) | http://localhost:8000 |
 
 - 프론트 Nginx가 `/api` 요청을 backend로 전달합니다.
-- 이미지에 **Tesseract(kor)** + **Poppler**가 포함되어 OCR 파서를 Linux에서 바로 사용할 수 있습니다.
+- 이미지에 **Tesseract(kor)** + **Poppler**가 포함됩니다. PaddleOCR는 Docker(Python 3.12)에서 `requirements-paddle.txt` 설치를 시도합니다.
+
+**로컬 Python 3.14**에서는 PaddlePaddle wheel이 없어 `requirements.txt`만 설치하세요. Paddle 비교는 Docker 또는 Python 3.12 venv를 사용하세요.
 
 백그라운드 실행:
 
@@ -66,9 +68,9 @@ docker compose down
 
 ## 파서 (파일 확장자에 따라 UI에 동적 표시)
 
-**이미지:** `TESSERACT_OCR` · `EASYOCR` · `PADDLEOCR` · `TABLE_OCR` · `AUTO`
+**이미지:** `TESSERACT_OCR` · `EASYOCR` · `PADDLEOCR` · `AUTO`
 
-**PDF:** `PDF_TEXT` · `PDF_TESSERACT_OCR` · `PDF_EASYOCR` · `PDF_PADDLEOCR` · `TABLE_OCR` · `AUTO`
+**PDF:** `PDF_TEXT` · `PDF_TESSERACT_OCR` · `PDF_EASYOCR` · `PDF_PADDLEOCR` · `AUTO`
 
 **전처리/후처리:** 체크박스로 단계 선택 (튜토리얼 프리셋: 확대→grayscale→binary→erosion→dilation). OCR 파서에만 적용.
 

@@ -63,10 +63,6 @@ export default function ResultSummaryCards({
       value: result ? result.text_length.toLocaleString() : "-",
     },
     {
-      label: "표 개수",
-      value: result ? String(result.table_count) : "-",
-    },
-    {
       label: "오류 개수",
       value: result ? String(result.error_count) : "-",
       highlight: result && result.error_count > 0,

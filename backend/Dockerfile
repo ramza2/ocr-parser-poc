@@ -12,8 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install -r requirements.txt
+COPY requirements.txt requirements-paddle.txt ./
+RUN pip install -r requirements.txt \
+    && pip install -r requirements-paddle.txt || true
 
 COPY app ./app
 

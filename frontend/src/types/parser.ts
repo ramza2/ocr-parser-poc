@@ -77,7 +77,6 @@ export type ResultTab =
   | "json"
   | "log"
   | "error"
-  | "table"
   | "compare";
 
 export type RunStatus = "idle" | "ready" | "running" | "success" | "failed";

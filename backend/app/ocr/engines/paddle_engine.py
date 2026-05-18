@@ -14,17 +14,25 @@ class PaddleOcrEngine(OcrEngine):
         try:
             from paddleocr import PaddleOCR
         except ImportError as exc:
+            import sys
+
+            ver = f"{sys.version_info.major}.{sys.version_info.minor}"
             raise ImportError(
-                "paddleocr 패키지가 설치되지 않았습니다. pip install paddlepaddle paddleocr"
+                f"paddleocr 미설치 또는 미지원 Python({ver}). "
+                "Python 3.10~3.12 가상환경에서 "
+                "pip install -r requirements-paddle.txt 를 시도하세요. "
+                "Python 3.14는 PaddlePaddle wheel이 없습니다."
             ) from exc
 
         if _ocr is None:
-            _ocr = PaddleOCR(
-                use_angle_cls=True,
-                lang="korean",
-                show_log=False,
-                use_gpu=False,
-            )
+            try:
+                _ocr = PaddleOCR(
+                    use_angle_cls=True,
+                    lang="korean",
+                    use_gpu=False,
+                )
+            except TypeError:
+                _ocr = PaddleOCR(use_angle_cls=True, lang="korean")
 
         result = _ocr.ocr(image_path, cls=True)
         lines: list[str] = []

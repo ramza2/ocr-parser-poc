@@ -1,0 +1,2 @@
+# Hanspell 후처리 (선택) — 일부 Python 버전에서 빌드 실패할 수 있음
+py-hanspell>=1.1

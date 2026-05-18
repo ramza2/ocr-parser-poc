@@ -8,7 +8,7 @@ export const MOCK_PARSE_RESULT: ParseResponse = {
   elapsed_ms: 1240,
   page_count: 3,
   text_length: 4281,
-  table_count: 2,
+  table_count: 0,
   error_count: 0,
   text: `[페이지 1]
 INVOICE
@@ -40,17 +40,7 @@ Thank you for your business.`,
     },
     { page_no: 3, text: "Total Amount Due: $12,450.00", blocks: [] },
   ],
-  tables: [
-    {
-      table_id: "table_1",
-      page_no: 2,
-      rows: [
-        ["NO", "DESCRIPTION", "QTY", "UNIT PRICE", "AMOUNT", "신뢰도"],
-        ["1", "Enterprise Software License", "10", "$1,200.00", "$12,000.00", "99.8%"],
-        ["2", "Premium Support Package", "1", "$450.00", "$450.00", "98.5%"],
-      ],
-    },
-  ],
+  tables: [],
   logs: [
     { level: "INFO", message: "파일 업로드 완료", timestamp: "10:00:01" },
     { level: "INFO", message: "PDF 텍스트 추출 시작", timestamp: "10:00:02" },

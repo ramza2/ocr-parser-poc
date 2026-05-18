@@ -13,7 +13,6 @@ import PipelineOptionsPanel from "../components/PipelineOptionsPanel";
 import ResultSummaryCards from "../components/ResultSummaryCards";
 import ResultTabs from "../components/ResultTabs";
 import RunControlPanel from "../components/RunControlPanel";
-import TableResultView from "../components/TableResultView";
 import TextResultView from "../components/TextResultView";
 import type {
   ParseResponse,
@@ -26,7 +25,7 @@ import type {
 import { getExtension, isSupportedExtension } from "../utils/fileUtils";
 import { MOCK_PARSE_RESULT } from "../utils/mockData";
 
-const NO_PIPELINE_PARSERS = new Set(["PDF_TEXT", "TABLE_OCR"]);
+const NO_PIPELINE_PARSERS = new Set(["PDF_TEXT"]);
 
 function supportsPipeline(parserId: string | null): boolean {
   return !!parserId && !NO_PIPELINE_PARSERS.has(parserId);
@@ -233,8 +232,6 @@ export default function OcrParserPocPage() {
         return <LogResultView logs={result.logs} />;
       case "error":
         return <ErrorResultView errors={result.errors} />;
-      case "table":
-        return <TableResultView tables={result.tables} />;
       case "compare":
         return (
           <section className="rounded-xl border border-amber-200 bg-amber-50 p-6">

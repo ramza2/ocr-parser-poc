@@ -1,14 +1,24 @@
 # OCR Parser PoC Backend
 
-## 실행
+## 실행 (Python 3.12 venv 권장 — PaddleOCR 포함)
 
-```bash
+```powershell
 cd backend
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
+.\setup-venv.ps1
+.\.venv\Scripts\activate
 uvicorn app.main:app --reload --port 8000
 ```
+
+수동 설정:
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\activate
+pip install -r requirements.txt -r requirements-paddle.txt
+uvicorn app.main:app --reload --port 8000
+```
+
+> **주의:** 시스템 기본 Python이 3.14이면 `python -m venv` 대신 반드시 `py -3.12 -m venv` 를 사용하세요.
 
 ## Docker
 
@@ -29,9 +39,9 @@ uvicorn app.main:app --reload --port 8000
 
 ## 파서 (확장자별 동적 노출)
 
-**이미지** (jpg/png/…): `TESSERACT_OCR`, `EASYOCR`, `PADDLEOCR`, `TABLE_OCR`, `AUTO`
+**이미지** (jpg/png/…): `TESSERACT_OCR`, `EASYOCR`, `PADDLEOCR`, `AUTO`
 
-**PDF**: `PDF_TEXT`, `PDF_TESSERACT_OCR`, `PDF_EASYOCR`, `PDF_PADDLEOCR`, `TABLE_OCR`, `AUTO`
+**PDF**: `PDF_TEXT`, `PDF_TESSERACT_OCR`, `PDF_EASYOCR`, `PDF_PADDLEOCR`, `AUTO`
 
 ## 전처리 단계
 
@@ -53,11 +63,31 @@ uvicorn app.main:app --reload --port 8000
 
 | step_id | 설명 |
 |---------|------|
-| hanspell | py-hanspell 맞춤법 교정 |
+| hanspell | py-hanspell 맞춤법 교정 (`pip install -r requirements-hanspell.txt`) |
 
 ## 선택 설치
 
 - **Tesseract** + `kor`/`eng`: `TESSERACT_OCR`, `PDF_TESSERACT_OCR`
 - **Poppler**: PDF → 이미지
-- **EasyOCR**: `EASYOCR`, `PDF_EASYOCR` (PyTorch 포함)
-- **PaddleOCR**: `PADDLEOCR`, `PDF_PADDLEOCR` (`paddlepaddle` 포함, 용량 큼)
+- **EasyOCR**: `EASYOCR`, `PDF_EASYOCR` (PyTorch 포함, Python 3.14에서도 대체로 동작)
+- **PaddleOCR**: `PADDLEOCR`, `PDF_PADDLEOCR` — **Python 3.10~3.12만 지원** (3.14에서는 wheel 없음)
+
+### PaddleOCR 설치 (Python 3.12 가상환경 권장)
+
+현재 PC가 **Python 3.14**이면 `pip install paddlepaddle`이 실패합니다. PoC에서 Paddle만 쓰려면 3.12 venv를 따로 만드세요.
+
+```bash
+py -3.12 -m venv .venv312
+.venv312\Scripts\activate
+pip install -r requirements.txt
+pip install -r requirements-paddle.txt
+```
+
+Windows CPU 공식 미러 예시:
+
+```bash
+pip install paddlepaddle==3.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
+pip install paddleocr>=2.7.0
+```
+
+Paddle 없이도 **Tesseract / EasyOCR** 비교는 `pip install -r requirements.txt` 만으로 가능합니다.
