@@ -39,14 +39,33 @@ export async function parseFile(
   form.append("preprocess_steps", JSON.stringify(preprocessSteps));
   form.append("postprocess_steps", JSON.stringify(postprocessSteps));
 
-  const res = await fetch("/api/parse", {
-    method: "POST",
-    body: form,
-  });
-
-  if (!res.ok) {
-    throw new Error("Parse request failed");
+  let res: Response;
+  try {
+    res = await fetch("/api/parse", {
+      method: "POST",
+      body: form,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `API 서버에 연결할 수 없습니다. 백엔드(uvicorn)가 실행 중인지, .venv(3.12)로 실행했는지 확인하세요. (${msg})`
+    );
   }
 
-  return res.json() as Promise<ParseResponse>;
+  let data: ParseResponse;
+  try {
+    data = (await res.json()) as ParseResponse;
+  } catch {
+    throw new Error(`서버 응답을 읽을 수 없습니다. (HTTP ${res.status})`);
+  }
+
+  if (!res.ok) {
+    const detail =
+      data.errors?.[0]?.detail ||
+      data.errors?.[0]?.message ||
+      `HTTP ${res.status}`;
+    throw new Error(detail);
+  }
+
+  return data;
 }

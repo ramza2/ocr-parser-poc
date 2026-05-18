@@ -19,7 +19,10 @@ py -3.12 -m venv .venv
 
 Write-Host "패키지 설치 (수 분 소요)..."
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\pip.exe install -r requirements.txt -r requirements-paddle.txt
+.\.venv\Scripts\pip.exe install -r requirements.txt
+Write-Host "PaddleOCR 2.7 설치 (3.x 제거 후)..."
+.\.venv\Scripts\pip.exe uninstall paddlepaddle paddleocr paddlex -y 2>$null
+.\.venv\Scripts\pip.exe install -r requirements-paddle.txt
 
 Write-Host ""
 Write-Host "완료. 실행:"

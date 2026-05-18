@@ -1,7 +1,21 @@
 from app.parsers.base import ParseResult
-from app.schemas.parser import ParseResponse
+from app.schemas.parser import PageResult, ParseResponse
 from app.services import parser_registry
 from app.utils.file_utils import get_extension, is_supported_extension
+from app.utils.serialize_utils import make_json_safe
+
+
+def _safe_pages(pages: list) -> list[PageResult]:
+    safe: list[PageResult] = []
+    for p in pages:
+        safe.append(
+            PageResult(
+                page_no=p.page_no,
+                text=p.text,
+                blocks=make_json_safe(p.blocks),
+            )
+        )
+    return safe
 
 
 def to_response(result: ParseResult, extension: str) -> ParseResponse:
@@ -18,7 +32,7 @@ def to_response(result: ParseResult, extension: str) -> ParseResponse:
         table_count=len(result.tables),
         error_count=error_count,
         text=result.text,
-        pages=result.pages,
+        pages=_safe_pages(result.pages),
         tables=result.tables,
         logs=result.logs,
         errors=result.errors,

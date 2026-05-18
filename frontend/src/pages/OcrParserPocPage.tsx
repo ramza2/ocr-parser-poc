@@ -152,7 +152,9 @@ export default function OcrParserPocPage() {
       if (!response.success || response.error_count > 0) {
         setActiveTab("error");
       }
-    } catch {
+    } catch (err) {
+      const detail =
+        err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다.";
       setResult({
         success: false,
         parser_id: selectedParserId,
@@ -170,7 +172,7 @@ export default function OcrParserPocPage() {
           {
             code: "INTERNAL_ERROR",
             message: "처리 중 알 수 없는 오류가 발생했습니다.",
-            detail: "API 서버에 연결할 수 없습니다.",
+            detail,
           },
         ],
       });

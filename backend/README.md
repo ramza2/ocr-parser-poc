@@ -72,22 +72,18 @@ uvicorn app.main:app --reload --port 8000
 - **EasyOCR**: `EASYOCR`, `PDF_EASYOCR` (PyTorch 포함, Python 3.14에서도 대체로 동작)
 - **PaddleOCR**: `PADDLEOCR`, `PDF_PADDLEOCR` — **Python 3.10~3.12만 지원** (3.14에서는 wheel 없음)
 
-### PaddleOCR 설치 (Python 3.12 가상환경 권장)
+### PaddleOCR 설치 (Python 3.12 venv)
 
-현재 PC가 **Python 3.14**이면 `pip install paddlepaddle`이 실패합니다. PoC에서 Paddle만 쓰려면 3.12 venv를 따로 만드세요.
+**권장:** `requirements-paddle.txt`는 **PaddleOCR 2.7** 기준입니다 (Windows에서 3.x oneDNN 오류 회피).
 
-```bash
-py -3.12 -m venv .venv312
-.venv312\Scripts\activate
-pip install -r requirements.txt
+```powershell
+.\.venv\Scripts\activate
+pip uninstall paddlepaddle paddleocr paddlex -y
 pip install -r requirements-paddle.txt
 ```
 
-Windows CPU 공식 미러 예시:
+`Unknown argument: use_gpu` / `oneDNN` 오류 → PaddleOCR **3.x**가 설치된 상태입니다. 위처럼 **2.7로 재설치**하세요.
 
-```bash
-pip install paddlepaddle==3.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
-pip install paddleocr>=2.7.0
-```
+GPU 사용 시 CPU용 `paddlepaddle` 대신 `paddlepaddle-gpu`를 설치합니다 (CUDA 환경 필요). PoC CPU만 쓸 때는 `paddlepaddle==2.6.2`면 됩니다.
 
 Paddle 없이도 **Tesseract / EasyOCR** 비교는 `pip install -r requirements.txt` 만으로 가능합니다.

@@ -41,5 +41,23 @@ async def parse_file(
     temp_path = save_upload_to_temp(content, filename)
     try:
         return run_parse(temp_path, filename, parser_id, parse_options)
+    except Exception as exc:
+        from app.schemas.parser import ErrorItem, ParseResponse
+
+        return ParseResponse(
+            success=False,
+            parser_id=parser_id,
+            file_name=filename,
+            extension=extension,
+            elapsed_ms=0,
+            error_count=1,
+            errors=[
+                ErrorItem(
+                    code="INTERNAL_ERROR",
+                    message="처리 중 알 수 없는 오류가 발생했습니다.",
+                    detail=str(exc),
+                )
+            ],
+        )
     finally:
         remove_file(temp_path)
