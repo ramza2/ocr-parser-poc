@@ -1,4 +1,8 @@
-import type { ParseResponse, ParserInfo } from "../types/parser";
+import type {
+  ParseResponse,
+  ParserInfo,
+  PipelineStepsResponse,
+} from "../types/parser";
 
 export async function fetchHealth(): Promise<{ status: string }> {
   const res = await fetch("/api/health");
@@ -14,13 +18,26 @@ export async function fetchParsers(extension?: string): Promise<ParserInfo[]> {
   return data.parsers as ParserInfo[];
 }
 
+export async function fetchPipelineSteps(
+  extension?: string
+): Promise<PipelineStepsResponse> {
+  const query = extension ? `?extension=${encodeURIComponent(extension)}` : "";
+  const res = await fetch(`/api/pipeline-steps${query}`);
+  if (!res.ok) throw new Error("Failed to load pipeline steps");
+  return res.json() as Promise<PipelineStepsResponse>;
+}
+
 export async function parseFile(
   file: File,
-  parserId: string
+  parserId: string,
+  preprocessSteps: string[] = [],
+  postprocessSteps: string[] = []
 ): Promise<ParseResponse> {
   const form = new FormData();
   form.append("file", file);
   form.append("parser_id", parserId);
+  form.append("preprocess_steps", JSON.stringify(preprocessSteps));
+  form.append("postprocess_steps", JSON.stringify(postprocessSteps));
 
   const res = await fetch("/api/parse", {
     method: "POST",

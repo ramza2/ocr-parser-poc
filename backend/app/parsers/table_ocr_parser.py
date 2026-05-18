@@ -23,9 +23,9 @@ class TableOcrParser(ParserAdapter):
             return self._parse_pdf(file_path, file_name, start, logs)
 
         logs.append(log_item("WARN", "이미지 파일은 PDF 대비 표 추출 정확도가 제한됩니다."))
-        from app.parsers.image_ocr_parser import ImageOcrParser
+        from app.parsers.ocr_image_parser import EasyOcrParser
 
-        ocr_result = ImageOcrParser().parse(file_path, file_name, options)
+        ocr_result = EasyOcrParser.parse(file_path, file_name, options)
         ocr_result.parser_id = self.parser_id
         ocr_result.logs = logs + ocr_result.logs
         if ocr_result.success:

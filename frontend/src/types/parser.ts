@@ -5,6 +5,24 @@ export interface ParserInfo {
   supported_extensions: string[];
 }
 
+export interface PipelineStepInfo {
+  step_id: string;
+  name: string;
+  description: string;
+  applicable: string[];
+  default_order: number;
+}
+
+export interface PipelineStepsResponse {
+  file_kind: string;
+  preprocess: PipelineStepInfo[];
+  postprocess: PipelineStepInfo[];
+  presets: {
+    tutorial_full: string[];
+    none: string[];
+  };
+}
+
 export interface LogItem {
   level: string;
   message: string;

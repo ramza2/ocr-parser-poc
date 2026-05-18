@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchParsers, parseFile } from "../api/parserApi";
+import {
+  fetchParsers,
+  fetchPipelineSteps,
+  parseFile,
+} from "../api/parserApi";
 import ErrorResultView from "../components/ErrorResultView";
 import FileSelectPanel from "../components/FileSelectPanel";
 import JsonResultView from "../components/JsonResultView";
 import LogResultView from "../components/LogResultView";
 import ParserSelectPanel from "../components/ParserSelectPanel";
+import PipelineOptionsPanel from "../components/PipelineOptionsPanel";
 import ResultSummaryCards from "../components/ResultSummaryCards";
 import ResultTabs from "../components/ResultTabs";
 import RunControlPanel from "../components/RunControlPanel";
@@ -13,6 +18,7 @@ import TextResultView from "../components/TextResultView";
 import type {
   ParseResponse,
   ParserInfo,
+  PipelineStepInfo,
   ResultTab,
   RunStatus,
   SelectedFileInfo,
@@ -20,9 +26,24 @@ import type {
 import { getExtension, isSupportedExtension } from "../utils/fileUtils";
 import { MOCK_PARSE_RESULT } from "../utils/mockData";
 
+const NO_PIPELINE_PARSERS = new Set(["PDF_TEXT", "TABLE_OCR"]);
+
+function supportsPipeline(parserId: string | null): boolean {
+  return !!parserId && !NO_PIPELINE_PARSERS.has(parserId);
+}
+
 export default function OcrParserPocPage() {
   const [allParsers, setAllParsers] = useState<ParserInfo[]>([]);
   const [availableParsers, setAvailableParsers] = useState<ParserInfo[]>([]);
+  const [preprocessCatalog, setPreprocessCatalog] = useState<PipelineStepInfo[]>(
+    []
+  );
+  const [postprocessCatalog, setPostprocessCatalog] = useState<
+    PipelineStepInfo[]
+  >([]);
+  const [tutorialPreset, setTutorialPreset] = useState<string[]>([]);
+  const [selectedPreprocess, setSelectedPreprocess] = useState<string[]>([]);
+  const [selectedPostprocess, setSelectedPostprocess] = useState<string[]>([]);
   const [selectedFile, setSelectedFile] = useState<SelectedFileInfo | null>(null);
   const [selectedParserId, setSelectedParserId] = useState<string | null>(null);
   const [result, setResult] = useState<ParseResponse | null>(null);
@@ -43,6 +64,19 @@ export default function OcrParserPocPage() {
       });
   }, []);
 
+  const loadPipelineSteps = useCallback(async (extension: string) => {
+    try {
+      const data = await fetchPipelineSteps(extension);
+      setPreprocessCatalog(data.preprocess);
+      setPostprocessCatalog(data.postprocess);
+      setTutorialPreset(data.presets.tutorial_full ?? []);
+    } catch {
+      setPreprocessCatalog([]);
+      setPostprocessCatalog([]);
+      setTutorialPreset([]);
+    }
+  }, []);
+
   const loadParsersForFile = useCallback(
     async (extension: string) => {
       if (!isSupportedExtension(extension)) {
@@ -53,12 +87,13 @@ export default function OcrParserPocPage() {
         const parsers = await fetchParsers(extension);
         setAvailableParsers(parsers);
         setApiOnline(true);
+        await loadPipelineSteps(extension);
       } catch {
         setApiOnline(false);
         setAvailableParsers([]);
       }
     },
-    []
+    [loadPipelineSteps]
   );
 
   const handleFileSelect = async (file: File) => {
@@ -72,6 +107,8 @@ export default function OcrParserPocPage() {
     };
     setSelectedFile(info);
     setSelectedParserId(null);
+    setSelectedPreprocess([]);
+    setSelectedPostprocess([]);
     setResult(null);
     setStatus(isSupportedExtension(extension) ? "ready" : "idle");
     await loadParsersForFile(extension);
@@ -82,6 +119,13 @@ export default function OcrParserPocPage() {
 
     setStatus("running");
     setActiveTab("text");
+
+    const preprocess = supportsPipeline(selectedParserId)
+      ? selectedPreprocess
+      : [];
+    const postprocess = supportsPipeline(selectedParserId)
+      ? selectedPostprocess
+      : [];
 
     if (useMock) {
       await new Promise((r) => setTimeout(r, 800));
@@ -98,7 +142,12 @@ export default function OcrParserPocPage() {
     }
 
     try {
-      const response = await parseFile(selectedFile.file, selectedParserId);
+      const response = await parseFile(
+        selectedFile.file,
+        selectedParserId,
+        preprocess,
+        postprocess
+      );
       setResult(response);
       setStatus(response.success ? "success" : "failed");
       if (!response.success || response.error_count > 0) {
@@ -134,9 +183,13 @@ export default function OcrParserPocPage() {
   const handleReset = () => {
     setSelectedFile(null);
     setSelectedParserId(null);
+    setSelectedPreprocess([]);
+    setSelectedPostprocess([]);
     setResult(null);
     setStatus("idle");
     setAvailableParsers([]);
+    setPreprocessCatalog([]);
+    setPostprocessCatalog([]);
     setActiveTab("text");
   };
 
@@ -145,6 +198,9 @@ export default function OcrParserPocPage() {
     !!selectedParserId &&
     isSupportedExtension(selectedFile.extension) &&
     status !== "running";
+
+  const pipelineEnabled =
+    !!selectedFile && supportsPipeline(selectedParserId) && status !== "running";
 
   const renderTabContent = () => {
     if (!result && status !== "running") {
@@ -182,10 +238,10 @@ export default function OcrParserPocPage() {
       case "compare":
         return (
           <section className="rounded-xl border border-amber-200 bg-amber-50 p-6">
-            <h3 className="text-sm font-semibold text-amber-900">파서 비교 (후순위)</h3>
+            <h3 className="text-sm font-semibold text-amber-900">파서 비교</h3>
             <p className="mt-2 text-sm text-amber-800">
-              여러 파서 결과를 한 화면에서 비교하는 기능은 1차 PoC 범위에서 제외되었습니다.
-              동일 파일로 파서를 바꿔 실행하여 결과를 비교해 주세요.
+              동일 파일로 Tesseract / EasyOCR / PaddleOCR을 바꿔 실행하고,
+              전처리·후처리 조합을 달리해 결과를 비교해 주세요.
             </p>
           </section>
         );
@@ -197,11 +253,11 @@ export default function OcrParserPocPage() {
   return (
     <div className="min-h-screen">
       <header className="border-b border-slate-200 bg-white px-6 py-4 shadow-sm">
-        <div className="mx-auto flex max-w-[1600px] items-start justify-between">
+        <div className="mx-auto flex max-w-[1680px] items-start justify-between">
           <div>
             <h1 className="text-xl font-bold text-slate-900">OCR 파서 검증 PoC</h1>
             <p className="mt-0.5 text-sm text-slate-500">
-              PDF·이미지 기반 OCR/문서 파서 자체개발 가능성 검토용
+              OCR 엔진·전처리·후처리 조합 비교
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -226,26 +282,63 @@ export default function OcrParserPocPage() {
         </div>
       </header>
 
-      <div className="mx-auto flex max-w-[1600px] gap-0">
-        <aside className="w-[360px] shrink-0 border-r border-slate-200 bg-white p-5">
+      <div className="mx-auto flex max-w-[1680px] gap-0">
+        <aside className="w-[400px] shrink-0 overflow-y-auto border-r border-slate-200 bg-white p-5">
           <FileSelectPanel
             selectedFile={selectedFile}
             onSelect={handleFileSelect}
             disabled={status === "running"}
           />
-          <hr className="my-5 border-slate-100" />
+          <hr className="my-4 border-slate-100" />
           <ParserSelectPanel
             parsers={availableParsers}
             selectedParserId={selectedParserId}
             onSelect={setSelectedParserId}
             disabled={!selectedFile || status === "running"}
           />
-          <RunControlPanel
-            onRun={handleRun}
-            onReset={handleReset}
-            canRun={canRun}
-            isRunning={status === "running"}
-          />
+
+          {selectedFile && (
+            <>
+              <hr className="my-4 border-slate-100" />
+              <h2 className="mb-2 text-sm font-semibold text-slate-800">
+                3. 전처리 · 후처리
+              </h2>
+              {!supportsPipeline(selectedParserId) && selectedParserId && (
+                <p className="mb-2 text-xs text-slate-500">
+                  선택한 파서는 OCR 파이프라인 전처리/후처리를 사용하지 않습니다.
+                </p>
+              )}
+              <PipelineOptionsPanel
+                title="전처리"
+                steps={preprocessCatalog}
+                selected={selectedPreprocess}
+                onChange={setSelectedPreprocess}
+                disabled={!pipelineEnabled}
+                presetLabel="튜토리얼 전체"
+                onPreset={() => setSelectedPreprocess(tutorialPreset)}
+                onClear={() => setSelectedPreprocess([])}
+              />
+              <div className="mt-3">
+                <PipelineOptionsPanel
+                  title="후처리"
+                  steps={postprocessCatalog}
+                  selected={selectedPostprocess}
+                  onChange={setSelectedPostprocess}
+                  disabled={!pipelineEnabled}
+                  onClear={() => setSelectedPostprocess([])}
+                />
+              </div>
+            </>
+          )}
+
+          <div className="mt-4">
+            <RunControlPanel
+              onRun={handleRun}
+              onReset={handleReset}
+              canRun={canRun}
+              isRunning={status === "running"}
+            />
+          </div>
         </aside>
 
         <main className="min-w-0 flex-1 space-y-4 p-5">

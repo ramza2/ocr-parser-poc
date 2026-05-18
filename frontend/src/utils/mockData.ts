@@ -2,7 +2,7 @@ import type { ParseResponse } from "../types/parser";
 
 export const MOCK_PARSE_RESULT: ParseResponse = {
   success: true,
-  parser_id: "PDF_TEXT",
+  parser_id: "TESSERACT_OCR",
   file_name: "sample_invoice_2023.pdf",
   extension: "pdf",
   elapsed_ms: 1240,

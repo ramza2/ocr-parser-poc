@@ -64,13 +64,13 @@ docker compose down
 | GET | `/api/parsers?extension=pdf` | 파서 목록 |
 | POST | `/api/parse` | 파싱 실행 (`file`, `parser_id`) |
 
-## 파서
+## 파서 (파일 확장자에 따라 UI에 동적 표시)
 
-- `PDF_TEXT` — PDF 텍스트 레이어 추출
-- `PDF_IMAGE_OCR` — PDF → 이미지 → OCR (Poppler + Tesseract 필요)
-- `IMAGE_OCR` — 이미지 OCR (Tesseract 필요)
-- `TABLE_OCR` — PDF 표 추출 (pdfplumber)
-- `AUTO` — PDF는 텍스트 추출 후 없으면 OCR fallback
+**이미지:** `TESSERACT_OCR` · `EASYOCR` · `PADDLEOCR` · `TABLE_OCR` · `AUTO`
+
+**PDF:** `PDF_TEXT` · `PDF_TESSERACT_OCR` · `PDF_EASYOCR` · `PDF_PADDLEOCR` · `TABLE_OCR` · `AUTO`
+
+**전처리/후처리:** 체크박스로 단계 선택 (튜토리얼 프리셋: 확대→grayscale→binary→erosion→dilation). OCR 파서에만 적용.
 
 ## Mock 모드
 

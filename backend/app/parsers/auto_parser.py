@@ -1,6 +1,6 @@
 from app.parsers.base import ParseResult, ParserAdapter
-from app.parsers.image_ocr_parser import ImageOcrParser
-from app.parsers.pdf_image_ocr_parser import PdfImageOcrParser
+from app.parsers.ocr_image_parser import EasyOcrParser
+from app.parsers.pdf_ocr_parser import PdfEasyOcrParser
 from app.parsers.pdf_text_parser import PdfTextParser
 from app.utils.log_utils import log_item
 
@@ -8,7 +8,7 @@ from app.utils.log_utils import log_item
 class AutoParser(ParserAdapter):
     parser_id = "AUTO"
     name = "자동 선택 파서"
-    description = "확장자와 파일 특성에 따라 기본 파서를 자동 실행합니다."
+    description = "PDF는 텍스트 추출 후 실패 시 EasyOCR, 이미지는 EasyOCR을 기본 사용합니다."
     supported_extensions = ["pdf", "jpg", "jpeg", "png", "tif", "tiff"]
 
     def parse(self, file_path: str, file_name: str, options: dict | None = None) -> ParseResult:
@@ -24,15 +24,15 @@ class AutoParser(ParserAdapter):
                 ]
                 return text_result
 
-            logs.append(log_item("INFO", "텍스트 레이어가 없어 PDF_IMAGE_OCR로 전환합니다."))
-            ocr_result = PdfImageOcrParser().parse(file_path, file_name, options)
+            logs.append(log_item("INFO", "텍스트 레이어 없음 → PDF_EASYOCR"))
+            ocr_result = PdfEasyOcrParser.parse(file_path, file_name, options)
             ocr_result.parser_id = self.parser_id
             ocr_result.logs = logs + ocr_result.logs
             return ocr_result
 
-        image_result = ImageOcrParser().parse(file_path, file_name, options)
+        image_result = EasyOcrParser.parse(file_path, file_name, options)
         image_result.parser_id = self.parser_id
         image_result.logs = logs + image_result.logs + [
-            log_item("INFO", "이미지 파일에 IMAGE_OCR을 적용했습니다.")
+            log_item("INFO", "이미지 파일에 EASYOCR을 적용했습니다.")
         ]
         return image_result

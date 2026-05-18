@@ -121,9 +121,14 @@ def validate_parse_request(
     return None
 
 
-def run_parse(file_path: str, filename: str, parser_id: str) -> ParseResponse:
+def run_parse(
+    file_path: str,
+    filename: str,
+    parser_id: str,
+    parse_options: dict | None = None,
+) -> ParseResponse:
     extension = get_extension(filename)
     parser = parser_registry.get_parser(parser_id)
     assert parser is not None
-    result = parser.parse(file_path, filename)
+    result = parser.parse(file_path, filename, parse_options)
     return to_response(result, extension)
