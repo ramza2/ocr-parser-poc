@@ -33,6 +33,29 @@ npm run dev
 
 브라우저: http://localhost:5173
 
+## Docker (Linux 배포 / 환경 통일)
+
+프로젝트 루트에서 한 번에 실행:
+
+```bash
+docker compose up --build
+```
+
+| 서비스 | URL |
+|--------|-----|
+| 웹 UI | http://localhost:8080 |
+| API (직접) | http://localhost:8000 |
+
+- 프론트 Nginx가 `/api` 요청을 backend로 전달합니다.
+- 이미지에 **Tesseract(kor)** + **Poppler**가 포함되어 OCR 파서를 Linux에서 바로 사용할 수 있습니다.
+
+백그라운드 실행:
+
+```bash
+docker compose up --build -d
+docker compose down
+```
+
 ## API
 
 | Method | URL | 설명 |
