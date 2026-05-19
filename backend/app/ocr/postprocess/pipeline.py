@@ -8,8 +8,9 @@ def apply_postprocess(
     text: str,
     step_ids: list[str],
     options: dict | None = None,
+    blocks: list | None = None,
 ) -> tuple[str, list]:
-    if not step_ids or not text.strip():
+    if not step_ids:
         return text, []
 
     opts = options or {}
@@ -21,7 +22,10 @@ def apply_postprocess(
         if not fn:
             logs.append(log_item("WARN", f"알 수 없는 후처리 단계 무시: {step_id}"))
             continue
-        current, step_logs = fn(current, **opts.get(step_id, {}))
+        step_opts = dict(opts.get(step_id, {}))
+        if step_id == "layout_order":
+            step_opts.setdefault("blocks", blocks or [])
+        current, step_logs = fn(current, **step_opts)
         logs.extend(step_logs)
 
     return current, logs

@@ -8,7 +8,9 @@ def get_easyocr_reader():
     if _reader is None:
         import easyocr
 
-        _reader = easyocr.Reader(["ko", "en"], gpu=False, verbose=False)
+        from app.utils.gpu_config import easyocr_use_gpu
+
+        _reader = easyocr.Reader(["ko", "en"], gpu=easyocr_use_gpu(), verbose=False)
     return _reader
 
 

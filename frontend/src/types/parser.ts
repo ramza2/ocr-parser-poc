@@ -18,7 +18,8 @@ export interface PipelineStepsResponse {
   preprocess: PipelineStepInfo[];
   postprocess: PipelineStepInfo[];
   presets: {
-    tutorial_full: string[];
+    scanned_doc: string[];
+    postprocess_essential: string[];
     none: string[];
   };
 }

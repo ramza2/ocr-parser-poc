@@ -1,6 +1,6 @@
 import type { PipelineStepInfo } from "../types/parser";
 
-interface Props {
+type Props = {
   title: string;
   steps: PipelineStepInfo[];
   selected: string[];
@@ -9,14 +9,14 @@ interface Props {
   presetLabel?: string;
   onPreset?: () => void;
   onClear?: () => void;
-}
+};
 
 export default function PipelineOptionsPanel({
   title,
   steps,
   selected,
   onChange,
-  disabled,
+  disabled = false,
   presetLabel,
   onPreset,
   onClear,
@@ -36,18 +36,16 @@ export default function PipelineOptionsPanel({
   };
 
   return (
-    <section className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-          {title}
-        </h3>
+    <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h3 className="text-xs font-semibold text-slate-700">{title}</h3>
         <div className="flex gap-1">
           {onPreset && presetLabel && (
             <button
               type="button"
               disabled={disabled}
               onClick={onPreset}
-              className="rounded border border-slate-200 px-2 py-0.5 text-[10px] text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              className="rounded px-2 py-0.5 text-[10px] font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-40"
             >
               {presetLabel}
             </button>
@@ -57,49 +55,38 @@ export default function PipelineOptionsPanel({
               type="button"
               disabled={disabled}
               onClick={onClear}
-              className="rounded border border-slate-200 px-2 py-0.5 text-[10px] text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              className="rounded px-2 py-0.5 text-[10px] text-slate-500 hover:bg-slate-100 disabled:opacity-40"
             >
               초기화
             </button>
           )}
         </div>
       </div>
-
-      {steps.length === 0 ? (
-        <p className="text-xs text-slate-500">사용 가능한 단계가 없습니다.</p>
-      ) : (
-        <ul className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50 p-2">
-          {steps.map((step) => (
-            <li key={step.step_id}>
-              <label
-                className={`flex cursor-pointer items-start gap-2 rounded p-1.5 text-xs hover:bg-white ${
-                  disabled ? "cursor-not-allowed opacity-60" : ""
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={selected.includes(step.step_id)}
-                  disabled={disabled}
-                  onChange={() => toggle(step.step_id)}
-                  className="mt-0.5 rounded border-slate-300"
-                />
-                <span>
-                  <span className="font-medium text-slate-800">{step.name}</span>
-                  <span className="mt-0.5 block text-slate-500">
-                    {step.description}
-                  </span>
+      <ul className="space-y-1.5">
+        {steps.map((step) => (
+          <li key={step.step_id}>
+            <label
+              className={`flex cursor-pointer gap-2 rounded-md px-2 py-1.5 text-xs ${
+                disabled ? "cursor-not-allowed opacity-50" : "hover:bg-white"
+              }`}
+            >
+              <input
+                type="checkbox"
+                className="mt-0.5 rounded border-slate-300"
+                checked={selected.includes(step.step_id)}
+                disabled={disabled}
+                onChange={() => toggle(step.step_id)}
+              />
+              <span>
+                <span className="font-medium text-slate-800">{step.name}</span>
+                <span className="mt-0.5 block text-[10px] leading-snug text-slate-500">
+                  {step.description}
                 </span>
-              </label>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {selected.length > 0 && (
-        <p className="text-[10px] text-slate-500">
-          적용 순서: {selected.join(" → ")}
-        </p>
-      )}
-    </section>
+              </span>
+            </label>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

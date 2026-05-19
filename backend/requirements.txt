@@ -5,7 +5,8 @@ pypdf>=5.1.0
 Pillow>=11.0.0
 pytesseract>=0.3.13
 pdf2image>=1.17.0
-opencv-python-headless>=4.10.0,<4.11
+# PaddleOCR 2.7과 버전 맞춤 (headless 4.10+ 와 혼재 시 cv2 깨짐)
+opencv-contrib-python==4.6.0.66
 # Paddle 2.6.x는 numpy 1.x ABI 필요 (2.x면 ImportError)
 numpy>=1.26.0,<2.0
 easyocr>=1.7.2

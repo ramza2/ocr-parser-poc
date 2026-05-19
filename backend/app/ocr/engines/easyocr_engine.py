@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.ocr.engines.base import OcrEngine
+from app.utils.gpu_config import easyocr_use_gpu
 from app.utils.serialize_utils import make_json_safe
 
 _reader = None
@@ -12,7 +13,7 @@ def _get_reader():
         import easyocr
 
         try:
-            _reader = easyocr.Reader(["ko", "en"], gpu=False, verbose=False)
+            _reader = easyocr.Reader(["ko", "en"], gpu=easyocr_use_gpu(), verbose=False)
         except Exception as exc:
             detail = str(exc)
             if "shm.dll" in detail or "torch" in detail.lower():

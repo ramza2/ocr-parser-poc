@@ -19,100 +19,119 @@ def _to_pil(gray: np.ndarray) -> Image.Image:
     return Image.fromarray(gray)
 
 
-def step_resize(img: Image.Image, scale: float = 2.0, **_kwargs) -> Image.Image:
+def _as_gray(bgr: np.ndarray) -> np.ndarray:
     import cv2
 
-    bgr = _to_cv2(img)
-    out = cv2.resize(bgr, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
-    if out.ndim == 2:
-        return _to_pil(out)
-    import cv2 as cv
-
-    return Image.fromarray(cv.cvtColor(out, cv.COLOR_BGR2RGB))
+    if bgr.ndim == 2:
+        return bgr
+    return cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
 
 
-def step_grayscale(img: Image.Image, **_kwargs) -> Image.Image:
+def step_deskew(img: Image.Image, max_angle: float = 15.0, **_kwargs) -> Image.Image:
+    """회전 보정: 기울어진 문서를 수평에 가깝게 맞춥니다."""
     import cv2
 
-    bgr = _to_cv2(img)
-    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY) if bgr.ndim == 3 else bgr
-    return _to_pil(gray)
+    gray = _as_gray(_to_cv2(img))
+    inv = cv2.bitwise_not(gray)
+    coords = np.column_stack(np.where(inv > 0))
+    if len(coords) < 100:
+        return img
+
+    rect = cv2.minAreaRect(coords)
+    angle = rect[-1]
+    if angle < -45:
+        angle = 90 + angle
+    if abs(angle) < 0.5 or abs(angle) > max_angle:
+        return img
+
+    h, w = gray.shape[:2]
+    center = (w // 2, h // 2)
+    matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
+    rotated = cv2.warpAffine(
+        _to_cv2(img),
+        matrix,
+        (w, h),
+        flags=cv2.INTER_CUBIC,
+        borderMode=cv2.BORDER_REPLICATE,
+    )
+    if rotated.ndim == 2:
+        return _to_pil(rotated)
+    return Image.fromarray(cv2.cvtColor(rotated, cv2.COLOR_BGR2RGB))
 
 
-def step_clahe(img: Image.Image, **_kwargs) -> Image.Image:
+def step_binarize(img: Image.Image, **_kwargs) -> Image.Image:
+    """이진화: 배경 노이즈·흐린 글씨 대비 강화."""
     import cv2
 
-    gray = _to_cv2(img)
-    if gray.ndim == 3:
-        gray = cv2.cvtColor(gray, cv2.COLOR_BGR2GRAY)
-    clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
-    return _to_pil(clahe.apply(gray))
-
-
-def step_denoise(img: Image.Image, **_kwargs) -> Image.Image:
-    import cv2
-
-    gray = _to_cv2(img)
-    if gray.ndim == 3:
-        gray = cv2.cvtColor(gray, cv2.COLOR_BGR2GRAY)
-    return _to_pil(cv2.fastNlMeansDenoising(gray, h=8))
-
-
-def step_invert_dark(img: Image.Image, threshold: float = 120, **_kwargs) -> Image.Image:
-    gray = _to_cv2(img)
-    if gray.ndim == 3:
-        import cv2
-
-        gray = cv2.cvtColor(gray, cv2.COLOR_BGR2GRAY)
-    if float(np.mean(gray)) < threshold:
-        gray = 255 - gray
-    return _to_pil(gray)
-
-
-def step_binary(img: Image.Image, **_kwargs) -> Image.Image:
-    import cv2
-
-    gray = _to_cv2(img)
-    if gray.ndim == 3:
-        gray = cv2.cvtColor(gray, cv2.COLOR_BGR2GRAY)
+    gray = _as_gray(_to_cv2(img))
     binary = cv2.adaptiveThreshold(
         gray,
         255,
         cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
         cv2.THRESH_BINARY,
-        15,
-        9,
+        21,
+        10,
     )
     return _to_pil(binary)
 
 
-def step_erosion(img: Image.Image, **_kwargs) -> Image.Image:
+def step_crop_roi(img: Image.Image, padding: int = 12, **_kwargs) -> Image.Image:
+    """크롭: 텍스트 영역(ROI)만 잘라 처리 부담을 줄입니다."""
     import cv2
 
-    gray = _to_cv2(img)
-    if gray.ndim == 3:
-        gray = cv2.cvtColor(gray, cv2.COLOR_BGR2GRAY)
-    kernel = np.ones((3, 3), np.uint8)
-    return _to_pil(cv2.erode(gray, kernel, iterations=1))
+    bgr = _to_cv2(img)
+    gray = _as_gray(bgr)
+    _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    coords = cv2.findNonZero(binary)
+    if coords is None:
+        return img
+
+    x, y, w, h = cv2.boundingRect(coords)
+    pad = max(0, padding)
+    x0 = max(0, x - pad)
+    y0 = max(0, y - pad)
+    x1 = min(bgr.shape[1], x + w + pad)
+    y1 = min(bgr.shape[0], y + h + pad)
+    cropped = bgr[y0:y1, x0:x1]
+    if cropped.ndim == 2:
+        return _to_pil(cropped)
+    return Image.fromarray(cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB))
 
 
-def step_dilation(img: Image.Image, **_kwargs) -> Image.Image:
+def step_enhance(
+    img: Image.Image,
+    scale: float = 1.5,
+    clip_limit: float = 2.5,
+    sharpen: bool = True,
+    **_kwargs,
+) -> Image.Image:
+    """명암비·해상도: CLAHE 대비 향상 + 선택적 확대·선명화."""
     import cv2
 
-    gray = _to_cv2(img)
-    if gray.ndim == 3:
-        gray = cv2.cvtColor(gray, cv2.COLOR_BGR2GRAY)
-    kernel = np.ones((3, 3), np.uint8)
-    return _to_pil(cv2.dilate(gray, kernel, iterations=1))
+    bgr = _to_cv2(img)
+    gray = _as_gray(bgr)
+    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(8, 8))
+    enhanced = clahe.apply(gray)
+
+    if sharpen:
+        blur = cv2.GaussianBlur(enhanced, (0, 0), 1.0)
+        enhanced = cv2.addWeighted(enhanced, 1.4, blur, -0.4, 0)
+
+    if scale and scale > 1.0:
+        enhanced = cv2.resize(
+            enhanced,
+            None,
+            fx=scale,
+            fy=scale,
+            interpolation=cv2.INTER_CUBIC,
+        )
+
+    return _to_pil(enhanced)
 
 
 PREPROCESS_STEP_FUNCS: dict[str, Callable[..., Image.Image]] = {
-    "resize": step_resize,
-    "grayscale": step_grayscale,
-    "clahe": step_clahe,
-    "denoise": step_denoise,
-    "invert_dark": step_invert_dark,
-    "binary": step_binary,
-    "erosion": step_erosion,
-    "dilation": step_dilation,
+    "deskew": step_deskew,
+    "binarize": step_binarize,
+    "crop_roi": step_crop_roi,
+    "enhance": step_enhance,
 }

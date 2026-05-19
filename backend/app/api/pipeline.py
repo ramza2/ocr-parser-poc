@@ -3,7 +3,8 @@ from fastapi import APIRouter, Query
 from app.services.pipeline_catalog import (
     POSTPROCESS_CATALOG,
     PREPROCESS_CATALOG,
-    PRESET_FULL_TUTORIAL,
+    PRESET_POSTPROCESS_ESSENTIAL,
+    PRESET_SCANNED_DOC,
     file_kind_from_extension,
     filter_steps,
 )
@@ -19,7 +20,8 @@ def get_pipeline_steps(extension: str | None = Query(default=None)):
         "preprocess": [s.model_dump() for s in filter_steps(PREPROCESS_CATALOG, kind)],
         "postprocess": [s.model_dump() for s in filter_steps(POSTPROCESS_CATALOG, kind)],
         "presets": {
-            "tutorial_full": PRESET_FULL_TUTORIAL,
+            "scanned_doc": PRESET_SCANNED_DOC,
+            "postprocess_essential": PRESET_POSTPROCESS_ESSENTIAL,
             "none": [],
         },
     }

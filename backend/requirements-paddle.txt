@@ -10,5 +10,8 @@
 # paddleocr>=3.5.0
 
 numpy>=1.26.0,<2.0
-paddlepaddle==2.6.2
+# GPU: paddlepaddle 대신 paddlepaddle-gpu==2.6.2 설치 (둘 중 하나만)
+# paddlepaddle==2.6.2
+opencv-contrib-python==4.6.0.66
+opencv-python==4.6.0.66
 paddleocr==2.7.3

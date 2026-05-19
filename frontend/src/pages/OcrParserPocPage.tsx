@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import {
-  fetchParsers,
-  fetchPipelineSteps,
-  parseFile,
-} from "../api/parserApi";
+import { fetchParsers, fetchPipelineSteps, parseFile } from "../api/parserApi";
 import ErrorResultView from "../components/ErrorResultView";
 import FileSelectPanel from "../components/FileSelectPanel";
 import JsonResultView from "../components/JsonResultView";
@@ -34,15 +30,6 @@ function supportsPipeline(parserId: string | null): boolean {
 export default function OcrParserPocPage() {
   const [allParsers, setAllParsers] = useState<ParserInfo[]>([]);
   const [availableParsers, setAvailableParsers] = useState<ParserInfo[]>([]);
-  const [preprocessCatalog, setPreprocessCatalog] = useState<PipelineStepInfo[]>(
-    []
-  );
-  const [postprocessCatalog, setPostprocessCatalog] = useState<
-    PipelineStepInfo[]
-  >([]);
-  const [tutorialPreset, setTutorialPreset] = useState<string[]>([]);
-  const [selectedPreprocess, setSelectedPreprocess] = useState<string[]>([]);
-  const [selectedPostprocess, setSelectedPostprocess] = useState<string[]>([]);
   const [selectedFile, setSelectedFile] = useState<SelectedFileInfo | null>(null);
   const [selectedParserId, setSelectedParserId] = useState<string | null>(null);
   const [result, setResult] = useState<ParseResponse | null>(null);
@@ -50,6 +37,16 @@ export default function OcrParserPocPage() {
   const [activeTab, setActiveTab] = useState<ResultTab>("text");
   const [useMock, setUseMock] = useState(false);
   const [apiOnline, setApiOnline] = useState<boolean | null>(null);
+  const [preprocessCatalog, setPreprocessCatalog] = useState<PipelineStepInfo[]>(
+    []
+  );
+  const [postprocessCatalog, setPostprocessCatalog] = useState<
+    PipelineStepInfo[]
+  >([]);
+  const [presetScanned, setPresetScanned] = useState<string[]>([]);
+  const [presetPostEssential, setPresetPostEssential] = useState<string[]>([]);
+  const [selectedPreprocess, setSelectedPreprocess] = useState<string[]>([]);
+  const [selectedPostprocess, setSelectedPostprocess] = useState<string[]>([]);
 
   useEffect(() => {
     fetchParsers()
@@ -68,11 +65,13 @@ export default function OcrParserPocPage() {
       const data = await fetchPipelineSteps(extension);
       setPreprocessCatalog(data.preprocess);
       setPostprocessCatalog(data.postprocess);
-      setTutorialPreset(data.presets.tutorial_full ?? []);
+      setPresetScanned(data.presets.scanned_doc ?? []);
+      setPresetPostEssential(data.presets.postprocess_essential ?? []);
     } catch {
       setPreprocessCatalog([]);
       setPostprocessCatalog([]);
-      setTutorialPreset([]);
+      setPresetScanned([]);
+      setPresetPostEssential([]);
     }
   }, []);
 
@@ -119,13 +118,6 @@ export default function OcrParserPocPage() {
     setStatus("running");
     setActiveTab("text");
 
-    const preprocess = supportsPipeline(selectedParserId)
-      ? selectedPreprocess
-      : [];
-    const postprocess = supportsPipeline(selectedParserId)
-      ? selectedPostprocess
-      : [];
-
     if (useMock) {
       await new Promise((r) => setTimeout(r, 800));
       const mock = {
@@ -139,6 +131,13 @@ export default function OcrParserPocPage() {
       if (!mock.success || mock.error_count > 0) setActiveTab("error");
       return;
     }
+
+    const preprocess = supportsPipeline(selectedParserId)
+      ? selectedPreprocess
+      : [];
+    const postprocess = supportsPipeline(selectedParserId)
+      ? selectedPostprocess
+      : [];
 
     try {
       const response = await parseFile(
@@ -239,8 +238,8 @@ export default function OcrParserPocPage() {
           <section className="rounded-xl border border-amber-200 bg-amber-50 p-6">
             <h3 className="text-sm font-semibold text-amber-900">파서 비교</h3>
             <p className="mt-2 text-sm text-amber-800">
-              동일 파일로 Tesseract / EasyOCR / PaddleOCR을 바꿔 실행하고,
-              전처리·후처리 조합을 달리해 결과를 비교해 주세요.
+              동일 파일로 Tesseract / EasyOCR / PaddleOCR 등 파서를 바꿔 실행하고
+              결과를 비교해 주세요.
             </p>
           </section>
         );
@@ -256,7 +255,7 @@ export default function OcrParserPocPage() {
           <div>
             <h1 className="text-xl font-bold text-slate-900">OCR 파서 검증 PoC</h1>
             <p className="mt-0.5 text-sm text-slate-500">
-              OCR 엔진·전처리·후처리 조합 비교
+              OCR 엔진·전·후처리 비교
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -304,26 +303,28 @@ export default function OcrParserPocPage() {
               </h2>
               {!supportsPipeline(selectedParserId) && selectedParserId && (
                 <p className="mb-2 text-xs text-slate-500">
-                  선택한 파서는 OCR 파이프라인 전처리/후처리를 사용하지 않습니다.
+                  선택한 파서는 OCR 전·후처리를 사용하지 않습니다.
                 </p>
               )}
               <PipelineOptionsPanel
-                title="전처리"
+                title="전처리 (필요 시)"
                 steps={preprocessCatalog}
                 selected={selectedPreprocess}
                 onChange={setSelectedPreprocess}
                 disabled={!pipelineEnabled}
-                presetLabel="튜토리얼 전체"
-                onPreset={() => setSelectedPreprocess(tutorialPreset)}
+                presetLabel="스캔 문서"
+                onPreset={() => setSelectedPreprocess(presetScanned)}
                 onClear={() => setSelectedPreprocess([])}
               />
               <div className="mt-3">
                 <PipelineOptionsPanel
-                  title="후처리"
+                  title="후처리 (권장)"
                   steps={postprocessCatalog}
                   selected={selectedPostprocess}
                   onChange={setSelectedPostprocess}
                   disabled={!pipelineEnabled}
+                  presetLabel="기본 권장"
+                  onPreset={() => setSelectedPostprocess(presetPostEssential)}
                   onClear={() => setSelectedPostprocess([])}
                 />
               </div>

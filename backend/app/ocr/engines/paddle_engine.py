@@ -7,9 +7,25 @@ os.environ.setdefault("FLAGS_use_mkldnn", "0")
 os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
 
 from app.ocr.engines.base import OcrEngine
+from app.utils.gpu_config import paddle_use_gpu
 from app.utils.serialize_utils import make_json_safe
 
 _ocr = None
+_ocr_use_gpu: bool | None = None
+
+
+def _paddle_import_error(exc: BaseException) -> ImportError:
+    import sys
+
+    ver = f"{sys.version_info.major}.{sys.version_info.minor}"
+    detail = str(exc).strip() or type(exc).__name__
+    hint = (
+        "pip install -r requirements-paddle.txt "
+        "(GPU: paddlepaddle-gpu==2.6.2). "
+        "OpenCV 오류면: pip uninstall opencv-python-headless -y && "
+        "pip install opencv-contrib-python==4.6.0.66 opencv-python==4.6.0.66"
+    )
+    return ImportError(f"paddleocr 로드 실패 (Python {ver}): {detail}. {hint}")
 
 
 def _paddle_major_version() -> int:
@@ -21,10 +37,23 @@ def _paddle_major_version() -> int:
         return 2
 
 
-def _create_paddle_ocr_v2():
+def _create_paddle_ocr_v2(*, use_gpu: bool):
     from paddleocr import PaddleOCR
 
-    return PaddleOCR(use_angle_cls=True, lang="korean", show_log=False)
+    return PaddleOCR(
+        use_angle_cls=True,
+        lang="korean",
+        show_log=False,
+        use_gpu=use_gpu,
+    )
+
+
+def _is_cuda_dll_error(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    return any(
+        k in msg
+        for k in ("cublas", "cudnn", "cuda", "dynamic library", "error code is 126")
+    )
 
 
 def _create_paddle_ocr_v3():
@@ -78,16 +107,13 @@ class PaddleOcrEngine(OcrEngine):
     name = "PaddleOCR"
 
     def recognize(self, image_path: str, options: dict | None = None) -> tuple[str, list[dict]]:
-        global _ocr
+        global _ocr, _ocr_use_gpu
         try:
             import paddleocr
         except ImportError as exc:
-            import sys
-
-            ver = f"{sys.version_info.major}.{sys.version_info.minor}"
-            raise ImportError(
-                f"paddleocr 미설치 (Python {ver}). pip install -r requirements-paddle.txt"
-            ) from exc
+            raise _paddle_import_error(exc) from exc
+        except Exception as exc:
+            raise _paddle_import_error(exc) from exc
 
         major = _paddle_major_version()
 
@@ -99,8 +125,22 @@ class PaddleOcrEngine(OcrEngine):
             )
 
         if _ocr is None:
-            _ocr = _create_paddle_ocr_v2()
+            use_gpu = paddle_use_gpu()
+            _ocr = _create_paddle_ocr_v2(use_gpu=use_gpu)
+            _ocr_use_gpu = use_gpu
 
-        raw = _ocr.ocr(image_path, cls=True)
+        try:
+            raw = _ocr.ocr(image_path, cls=True)
+        except Exception as exc:
+            if _ocr_use_gpu and _is_cuda_dll_error(exc):
+                from app.utils.gpu_config import reset_paddle_gpu_cache
+
+                reset_paddle_gpu_cache()
+                _ocr = _create_paddle_ocr_v2(use_gpu=False)
+                _ocr_use_gpu = False
+                raw = _ocr.ocr(image_path, cls=True)
+            else:
+                raise
+
         lines, blocks = _parse_v2_result(raw)
         return "\n".join(lines).strip(), blocks

@@ -13,80 +13,74 @@ class PipelineStepInfo(BaseModel):
 
 PREPROCESS_CATALOG: list[PipelineStepInfo] = [
     PipelineStepInfo(
-        step_id="resize",
-        name="확대",
-        description="이미지를 2배 확대합니다 (OpenCV resize).",
+        step_id="deskew",
+        name="회전 보정 (Deskew)",
+        description="기울어진 문서를 수평에 가깝게 맞춥니다.",
         applicable=["image", "pdf"],
         default_order=1,
     ),
     PipelineStepInfo(
-        step_id="grayscale",
-        name="Grayscale",
-        description="그레이스케일로 변환합니다.",
+        step_id="enhance",
+        name="명암비·해상도",
+        description="CLAHE 대비 향상, 선명화, 필요 시 확대합니다.",
         applicable=["image", "pdf"],
         default_order=2,
     ),
     PipelineStepInfo(
-        step_id="clahe",
-        name="CLAHE 대비",
-        description="국소 대비를 enhancement 합니다.",
+        step_id="binarize",
+        name="이진화 (Binarization)",
+        description="배경 노이즈·흐린 글씨 시 흑백 대비를 뚜렷하게 합니다.",
         applicable=["image", "pdf"],
         default_order=3,
     ),
     PipelineStepInfo(
-        step_id="denoise",
-        name="노이즈 제거",
-        description="fastNlMeansDenoising을 적용합니다.",
+        step_id="crop_roi",
+        name="크롭 (ROI)",
+        description="텍스트가 있는 영역만 잘라 OCR 부담을 줄입니다.",
         applicable=["image", "pdf"],
         default_order=4,
-    ),
-    PipelineStepInfo(
-        step_id="invert_dark",
-        name="어두운 배경 반전",
-        description="칠판·야간 사진 등 어두운 배경을 반전합니다.",
-        applicable=["image", "pdf"],
-        default_order=5,
-    ),
-    PipelineStepInfo(
-        step_id="binary",
-        name="Binary (이진화)",
-        description="적응형 이진화(adaptiveThreshold)를 적용합니다.",
-        applicable=["image", "pdf"],
-        default_order=6,
-    ),
-    PipelineStepInfo(
-        step_id="erosion",
-        name="Erosion (침식)",
-        description="형태학적 침식 연산을 적용합니다.",
-        applicable=["image", "pdf"],
-        default_order=7,
-    ),
-    PipelineStepInfo(
-        step_id="dilation",
-        name="Dilation (팽창)",
-        description="형태학적 팽창 연산을 적용합니다.",
-        applicable=["image", "pdf"],
-        default_order=8,
     ),
 ]
 
 POSTPROCESS_CATALOG: list[PipelineStepInfo] = [
     PipelineStepInfo(
-        step_id="hanspell",
-        name="Hanspell 맞춤법",
-        description="네이버 맞춤법 검사기 기반 한글 교정 (py-hanspell).",
+        step_id="strip_normalize",
+        name="공백·특수문자 정리",
+        description="strip(), 제어문자·노이즈 제거, 공백 정규화.",
         applicable=["image", "pdf"],
         default_order=1,
     ),
+    PipelineStepInfo(
+        step_id="format_rules",
+        name="도메인 포맷 교정",
+        description="전화번호(010-0000-0000), 주민등록번호 형식 정규화.",
+        applicable=["image", "pdf"],
+        default_order=2,
+    ),
+    PipelineStepInfo(
+        step_id="char_correct",
+        name="문자 혼동 교정",
+        description="숫자 구간에서 O/0, l/1 등 흔한 OCR 오인식 교정.",
+        applicable=["image", "pdf"],
+        default_order=3,
+    ),
+    PipelineStepInfo(
+        step_id="layout_order",
+        name="문단·레이아웃 정렬",
+        description="bbox 기준 위→아래·좌→우 재배열 (PP-Structure 대용 PoC).",
+        applicable=["image", "pdf"],
+        default_order=4,
+    ),
 ]
 
-# 블로그 권장 순서 프리셋
-PRESET_FULL_TUTORIAL = [
-    "resize",
-    "grayscale",
-    "binary",
-    "erosion",
-    "dilation",
+# 스캔·사진 문서 권장 전처리 순서
+PRESET_SCANNED_DOC = ["deskew", "enhance", "binarize"]
+
+# 후처리 기본 권장 (거의 필수)
+PRESET_POSTPROCESS_ESSENTIAL = [
+    "strip_normalize",
+    "format_rules",
+    "char_correct",
 ]
 
 

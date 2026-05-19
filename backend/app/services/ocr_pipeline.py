@@ -4,6 +4,7 @@ import os
 import time
 
 from app.ocr.engines.registry import get_engine
+from app.utils.gpu_config import engine_device_label
 from app.ocr.postprocess.pipeline import apply_postprocess
 from app.ocr.preprocess.pipeline import preprocess_to_temp_file
 from app.parsers.base import ParseResult
@@ -36,17 +37,22 @@ def run_image_ocr(
 ) -> ParseResult:
     start = time.perf_counter()
     preprocess_steps, postprocess_steps, ocr_opts = _parse_options(options)
-    logs = [
-        log_item("INFO", f"OCR 엔진: {engine_id}"),
-        log_item(
-            "INFO",
-            f"전처리: {preprocess_steps if preprocess_steps else '(없음)'}",
-        ),
-        log_item(
-            "INFO",
-            f"후처리: {postprocess_steps if postprocess_steps else '(없음)'}",
-        ),
-    ]
+    logs = [log_item("INFO", f"OCR 엔진: {engine_id}")]
+    device_label = engine_device_label(engine_id)
+    if device_label:
+        logs.append(log_item("INFO", device_label))
+    logs.extend(
+        [
+            log_item(
+                "INFO",
+                f"전처리: {preprocess_steps if preprocess_steps else '(없음)'}",
+            ),
+            log_item(
+                "INFO",
+                f"후처리: {postprocess_steps if postprocess_steps else '(없음)'}",
+            ),
+        ]
+    )
 
     engine = get_engine(engine_id)
     if not engine:
@@ -75,7 +81,9 @@ def run_image_ocr(
             temp_pre = work_path
 
         text, blocks = engine.recognize(work_path, ocr_opts)
-        text, post_logs = apply_postprocess(text, postprocess_steps, options)
+        text, post_logs = apply_postprocess(
+            text, postprocess_steps, options, blocks=blocks
+        )
         logs.extend(post_logs)
 
         elapsed = int((time.perf_counter() - start) * 1000)

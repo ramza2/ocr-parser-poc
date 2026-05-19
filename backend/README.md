@@ -43,27 +43,27 @@ uvicorn app.main:app --reload --port 8000
 
 **PDF**: `PDF_TEXT`, `PDF_TESSERACT_OCR`, `PDF_EASYOCR`, `PDF_PADDLEOCR`, `AUTO`
 
-## 전처리 단계
+## 전처리 단계 (필요 시)
 
 | step_id | 설명 |
 |---------|------|
-| resize | 2배 확대 |
-| grayscale | 그레이스케일 |
-| clahe | 대비 enhancement |
-| denoise | 노이즈 제거 |
-| invert_dark | 어두운 배경 반전 |
-| binary | 적응형 이진화 |
-| erosion | 침식 |
-| dilation | 팽창 |
+| deskew | 회전 보정 — 기울어진 문서를 수평에 맞춤 |
+| enhance | 명암비(CLAHE)·선명화·해상도 확대 |
+| binarize | 이진화 — 노이즈·흐린 글씨 대비 강화 |
+| crop_roi | 텍스트 ROI만 크롭 |
 
-프리셋 `tutorial_full`: resize → grayscale → binary → erosion → dilation  
-([참고 튜토리얼](https://timemash.tistory.com/entry/%EB%A8%B8%EC%8B%A0%EB%9F%AC%EB%8B%9D-%EC%9D%B4%EB%AF%B8%EC%A7%80%EC%97%90%EC%84%9C-%ED%95%9C%EA%B8%80-%EC%9D%B8%EC%8B%9D%ED%95%98%EA%B8%B0-OpenCV-Tesseract-Hanspell))
+프리셋 `scanned_doc`: deskew → enhance → binarize
 
-## 후처리 단계
+## 후처리 단계 (권장)
 
 | step_id | 설명 |
 |---------|------|
-| hanspell | py-hanspell 맞춤법 교정 (`pip install -r requirements-hanspell.txt`) |
+| strip_normalize | 공백·제어문자·노이즈 정리 |
+| format_rules | 전화번호·주민등록번호 포맷 교정 |
+| char_correct | 숫자 구간 O/0, l/1 교정 |
+| layout_order | bbox 기준 읽기 순서 정렬 (PP-Structure 대용 PoC) |
+
+프리셋 `postprocess_essential`: strip_normalize → format_rules → char_correct
 
 ## 선택 설치
 
@@ -84,6 +84,67 @@ pip install -r requirements-paddle.txt
 
 `Unknown argument: use_gpu` / `oneDNN` 오류 → PaddleOCR **3.x**가 설치된 상태입니다. 위처럼 **2.7로 재설치**하세요.
 
-GPU 사용 시 CPU용 `paddlepaddle` 대신 `paddlepaddle-gpu`를 설치합니다 (CUDA 환경 필요). PoC CPU만 쓸 때는 `paddlepaddle==2.6.2`면 됩니다.
+`paddleocr 미설치` / `paddleocr 로드 실패` / `cv2 has no attribute INTER_NEAREST` → **paddleocr는 설치됐지만 import 실패**인 경우가 많습니다. `opencv-python-headless`(4.10+)와 PaddleOCR용 OpenCV(4.6)가 섞이면 발생합니다.
+
+```powershell
+pip uninstall opencv-python-headless -y
+pip install opencv-contrib-python==4.6.0.66 opencv-python==4.6.0.66
+python -c "import paddleocr; print(paddleocr.__version__)"
+```
+
+GPU는 `paddlepaddle-gpu`만 있으면 됩니다 (`paddleocr` 패키지 이름은 동일). 설치 후 **uvicorn 재시작**하세요.
+
+### GPU (EasyOCR·PaddleOCR)
+
+CUDA가 **실제로 동작할 때만** GPU를 씁니다 (`torch.cuda` / Paddle GPU 텐서 프로브).  
+cuBLAS DLL이 없으면 Paddle은 **자동으로 CPU**로 폴백합니다.
+
+`GET /api/health` → `gpu.paddle_use_gpu`, `gpu.paddle_gpu_note` 확인.
+
+#### `cublas64_118.dll` / error code 126
+
+`paddlepaddle-gpu`는 **pip 패키지**만으로 끝나지 않고, PC에 **CUDA Toolkit의 cuBLAS DLL**이 PATH에 있어야 합니다.  
+`nvidia-smi`의 CUDA 12.6(드라이버)과 Paddle wheel이 요구하는 **런타임 CUDA 버전**은 다를 수 있습니다.
+
+| 증상 | 의미 |
+|------|------|
+| `cublas64_118.dll` | Paddle wheel이 **CUDA 11.8** 런타임을 찾는 경우가 많음 |
+| error code 126 | Windows에서 해당 DLL을 **PATH에서 못 찾음** |
+
+**해결 (택 1)**
+
+1. **CUDA Toolkit 11.8** 설치 후 PATH 추가 (Paddle 2.6 GPU wheel과 맞출 때)
+   - [NVIDIA CUDA 11.8](https://developer.nvidia.com/cuda-11-8-0-download-archive) 설치
+   - 시스템 PATH에 추가: `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8\bin`
+   - 터미널·uvicorn **재시작** 후 확인:
+   ```powershell
+   python -c "from app.utils.gpu_config import paddle_use_gpu; print(paddle_use_gpu())"
+   ```
+
+2. **당장 OCR만 필요** — CPU로 사용 (코드가 자동 폴백). 또는:
+   ```powershell
+   pip uninstall paddlepaddle-gpu -y
+   pip install paddlepaddle==2.6.2
+   ```
+
+3. **EasyOCR만 GPU** — PyTorch CUDA는 드라이버만으로 동작하는 경우가 많음. Paddle만 CPU로 쓰면 됨.
+
+**EasyOCR (PyTorch CUDA)**
+
+```powershell
+pip uninstall torch torchvision torchaudio -y
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+python -c "import torch; print(torch.cuda.is_available())"
+```
+
+**PaddleOCR (paddlepaddle-gpu)**
+
+```powershell
+pip uninstall paddlepaddle paddlepaddle-gpu -y
+pip install paddlepaddle-gpu==2.6.2 -f https://www.paddlepaddle.org.cn/whl/windows/mkl/avx/stable.html
+python -c "import paddle; paddle.device.set_device('gpu:0'); print(paddle.to_tensor([1.0]))"
+```
+
+마지막 명령이 실패하면 CUDA Toolkit/PATH를 맞추거나 CPU wheel을 쓰세요.
 
 Paddle 없이도 **Tesseract / EasyOCR** 비교는 `pip install -r requirements.txt` 만으로 가능합니다.
