@@ -35,19 +35,36 @@ npm run dev
 
 ## Docker (Linux 배포 / 환경 통일)
 
-프로젝트 루트에서 한 번에 실행:
+### CPU 스택 (PaddleOCR 2.7, GPU 없음)
 
 ```bash
 docker compose up --build
 ```
+
+### GPU 스택 (PaddleOCR 3.x + CUDA) — 권장 (3.x 검증용)
+
+**사전 설치:** [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
+
+```bash
+docker compose -f docker-compose.gpu.yml up --build
+```
+
+첫 기동 시 Paddle 모델 다운로드로 **수 분** 걸릴 수 있습니다.
 
 | 서비스 | URL |
 |--------|-----|
 | 웹 UI | http://localhost:8080 |
 | API (직접) | http://localhost:8000 |
 
+| 파일 | 용도 |
+|------|------|
+| `backend/Dockerfile` | CPU, Paddle 2.7 (`requirements-paddle.txt`) |
+| `backend/Dockerfile.gpu` | GPU, Paddle 3.3 + `requirements-paddle-v3.txt` |
+| `docker-compose.gpu.yml` | GPU 백엔드 + 프론트 |
+
 - 프론트 Nginx가 `/api` 요청을 backend로 전달합니다.
-- 이미지에 **Tesseract(kor)** + **Poppler**가 포함됩니다. PaddleOCR는 Docker(Python 3.12)에서 `requirements-paddle.txt` 설치를 시도합니다.
+- CPU 이미지: Tesseract(kor) + Poppler + Paddle 2.7.
+- GPU 이미지: 동일 + **paddlepaddle-gpu 3.3** (cu126 wheel).
 
 **로컬 Python 3.14**에서는 PaddlePaddle wheel이 없어 `requirements.txt`만 설치하세요. Paddle 비교는 Docker 또는 Python 3.12 venv를 사용하세요.
 
@@ -68,9 +85,9 @@ docker compose down
 
 ## 파서 (파일 확장자에 따라 UI에 동적 표시)
 
-**이미지:** `TESSERACT_OCR` · `EASYOCR` · `PADDLEOCR` · `AUTO`
+**이미지:** `TESSERACT_OCR` · `EASYOCR` · `PADDLEOCR`
 
-**PDF:** `PDF_TEXT` · `PDF_TESSERACT_OCR` · `PDF_EASYOCR` · `PDF_PADDLEOCR` · `AUTO`
+**스캔 PDF:** `PDF_TESSERACT_OCR` · `PDF_EASYOCR` · `PDF_PADDLEOCR` (페이지를 이미지로 렌더링 후 OCR)
 
 **전처리/후처리:** 체크박스로 단계 선택 (튜토리얼 프리셋: 확대→grayscale→binary→erosion→dilation). OCR 파서에만 적용.
 

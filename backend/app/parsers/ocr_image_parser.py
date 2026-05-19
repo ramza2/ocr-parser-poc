@@ -38,21 +38,21 @@ def _create_image_parser(
 
 TesseractOcrParser = _create_image_parser(
     "TESSERACT_OCR",
-    "Tesseract OCR",
-    "Tesseract 엔진. 전처리·후처리 파이프라인을 선택 적용할 수 있습니다.",
+    "Tesseract OCR (이미지)",
+    "이미지 파일에서 문자를 인식합니다. 전·후처리 옵션 적용 가능.",
     "tesseract",
 )
 
 EasyOcrParser = _create_image_parser(
     "EASYOCR",
-    "EasyOCR",
-    "딥러닝 EasyOCR. 사진·간판·손글씨에 유리한 경우가 많습니다.",
+    "EasyOCR (이미지)",
+    "이미지 파일에서 문자를 인식합니다. 사진·간판 등에 유리한 경우가 많습니다.",
     "easyocr",
 )
 
 PaddleOcrParser = _create_image_parser(
     "PADDLEOCR",
-    "PaddleOCR",
-    "PaddleOCR 한글 모델. 설치 용량이 큽니다.",
+    "PaddleOCR (이미지)",
+    "이미지 파일에서 문자를 인식합니다.",
     "paddleocr",
 )

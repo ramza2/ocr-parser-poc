@@ -1,0 +1,49 @@
+# PaddleOCR 3.x + GPU (NVIDIA Container Toolkit 필요)
+# 빌드: docker compose -f docker-compose.gpu.yml build backend
+FROM python:3.12-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    FLAGS_use_mkldnn=0 \
+    PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True \
+    EASYOCR_FORCE_CPU=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr \
+    tesseract-ocr-kor \
+    poppler-utils \
+    libgl1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements-docker-gpu-base.txt requirements-paddle-v3.txt ./
+
+# 공통 의존성 (< 버전은 requirements 파일에만 기재)
+RUN pip install --upgrade pip \
+    && pip install -r requirements-docker-gpu-base.txt
+
+# EasyOCR: CPU PyTorch만 사용 (CUDA torch + paddlepaddle-gpu NCCL 심볼 충돌 방지)
+RUN pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu \
+    && pip install "easyocr>=1.7.2"
+
+# Paddle 3.3 GPU (cu123 인덱스에는 3.1까지만 있음 → cu126 사용)
+RUN pip install paddlepaddle-gpu==3.3.0 \
+    -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
+
+RUN pip install -r requirements-paddle-v3.txt
+
+COPY app ./app
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

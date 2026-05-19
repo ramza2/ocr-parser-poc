@@ -1,0 +1,8 @@
+# PaddleOCR 3.x + GPU (Linux / Docker 전용)
+# paddlepaddle-gpu 는 Dockerfile.gpu 에서 CUDA wheel 로 별도 설치
+#
+# 로컬 Linux (CUDA 12.3 예):
+#   pip install paddlepaddle-gpu==3.3.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
+#   pip install -r requirements-paddle-v3.txt
+
+paddleocr>=3.5.0,<4.0

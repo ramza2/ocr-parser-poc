@@ -1,4 +1,3 @@
-from app.parsers.auto_parser import AutoParser
 from app.parsers.base import ParserAdapter
 from app.parsers.ocr_image_parser import EasyOcrParser, PaddleOcrParser, TesseractOcrParser
 from app.parsers.pdf_ocr_parser import (
@@ -6,33 +5,28 @@ from app.parsers.pdf_ocr_parser import (
     PdfPaddleOcrParser,
     PdfTesseractOcrParser,
 )
-from app.parsers.pdf_text_parser import PdfTextParser
 from app.schemas.parser import ParserInfo
 
 PARSERS: dict[str, ParserAdapter] = {
-    "PDF_TEXT": PdfTextParser(),
     "TESSERACT_OCR": TesseractOcrParser,
     "EASYOCR": EasyOcrParser,
     "PADDLEOCR": PaddleOcrParser,
     "PDF_TESSERACT_OCR": PdfTesseractOcrParser,
     "PDF_EASYOCR": PdfEasyOcrParser,
     "PDF_PADDLEOCR": PdfPaddleOcrParser,
-    "AUTO": AutoParser(),
 }
 
 EXTENSION_PARSER_MAP: dict[str, list[str]] = {
     "pdf": [
-        "PDF_TEXT",
         "PDF_TESSERACT_OCR",
         "PDF_EASYOCR",
         "PDF_PADDLEOCR",
-        "AUTO",
     ],
-    "jpg": ["TESSERACT_OCR", "EASYOCR", "PADDLEOCR", "AUTO"],
-    "jpeg": ["TESSERACT_OCR", "EASYOCR", "PADDLEOCR", "AUTO"],
-    "png": ["TESSERACT_OCR", "EASYOCR", "PADDLEOCR", "AUTO"],
-    "tif": ["TESSERACT_OCR", "EASYOCR", "PADDLEOCR", "AUTO"],
-    "tiff": ["TESSERACT_OCR", "EASYOCR", "PADDLEOCR", "AUTO"],
+    "jpg": ["TESSERACT_OCR", "EASYOCR", "PADDLEOCR"],
+    "jpeg": ["TESSERACT_OCR", "EASYOCR", "PADDLEOCR"],
+    "png": ["TESSERACT_OCR", "EASYOCR", "PADDLEOCR"],
+    "tif": ["TESSERACT_OCR", "EASYOCR", "PADDLEOCR"],
+    "tiff": ["TESSERACT_OCR", "EASYOCR", "PADDLEOCR"],
 }
 
 

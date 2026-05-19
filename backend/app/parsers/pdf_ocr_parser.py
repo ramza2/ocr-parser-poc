@@ -14,7 +14,7 @@ class _PdfOcrParserBase(ParserAdapter):
         self, file_path: str, file_name: str, options: dict | None = None
     ) -> ParseResult:
         start = time.perf_counter()
-        logs = [log_item("INFO", f"PDF → 이미지 변환 후 {self._engine_id} OCR")]
+        logs = [log_item("INFO", f"스캔 PDF 페이지 OCR ({self._engine_id})")]
 
         try:
             from pdf2image import convert_from_path
@@ -36,7 +36,7 @@ class _PdfOcrParserBase(ParserAdapter):
 
         try:
             images = convert_from_path(file_path, dpi=200)
-            logs.append(log_item("INFO", f"{len(images)}페이지 변환 완료"))
+            logs.append(log_item("INFO", f"스캔 PDF {len(images)}페이지 렌더링 완료"))
         except Exception as exc:
             elapsed = int((time.perf_counter() - start) * 1000)
             return ParseResult(
@@ -111,7 +111,7 @@ class _PdfOcrParserBase(ParserAdapter):
                 ],
             )
 
-        all_logs.append(log_item("INFO", "PDF OCR 완료"))
+        all_logs.append(log_item("INFO", "스캔 PDF OCR 완료"))
         return ParseResult(
             success=True,
             parser_id=self.parser_id,
@@ -145,21 +145,21 @@ def _create_pdf_ocr_parser(
 
 PdfTesseractOcrParser = _create_pdf_ocr_parser(
     "PDF_TESSERACT_OCR",
-    "PDF + Tesseract OCR",
-    "PDF 페이지를 이미지로 변환한 뒤 Tesseract OCR을 수행합니다.",
+    "Tesseract OCR (스캔 PDF)",
+    "스캔 PDF 각 페이지를 이미지로 렌더링한 뒤 OCR합니다. (텍스트 레이어 PDF는 대상 아님)",
     "tesseract",
 )
 
 PdfEasyOcrParser = _create_pdf_ocr_parser(
     "PDF_EASYOCR",
-    "PDF + EasyOCR",
-    "PDF 페이지를 이미지로 변환한 뒤 EasyOCR을 수행합니다.",
+    "EasyOCR (스캔 PDF)",
+    "스캔 PDF 각 페이지를 이미지로 렌더링한 뒤 OCR합니다. (텍스트 레이어 PDF는 대상 아님)",
     "easyocr",
 )
 
 PdfPaddleOcrParser = _create_pdf_ocr_parser(
     "PDF_PADDLEOCR",
-    "PDF + PaddleOCR",
-    "PDF 페이지를 이미지로 변환한 뒤 PaddleOCR을 수행합니다.",
+    "PaddleOCR (스캔 PDF)",
+    "스캔 PDF 각 페이지를 이미지로 렌더링한 뒤 OCR합니다. (텍스트 레이어 PDF는 대상 아님)",
     "paddleocr",
 )

@@ -22,7 +22,55 @@ uvicorn app.main:app --reload --port 8000
 
 ## Docker
 
-프로젝트 루트: `docker compose up --build`
+| 명령 | 스택 |
+|------|------|
+| `docker compose up --build` | CPU, PaddleOCR **2.7** (`Dockerfile` + `requirements-paddle.txt`) |
+| `docker compose -f docker-compose.gpu.yml up --build` | GPU, PaddleOCR **3.x** (`Dockerfile.gpu` + `requirements-paddle-v3.txt`) |
+
+### PaddleOCR 3.x + GPU 테스트 (Docker)
+
+**1. 사전 확인 (호스트)**
+
+```bash
+nvidia-smi
+docker run --rm --gpus all nvidia/cuda:12.1.0-base-ubuntu22.04 nvidia-smi
+```
+
+**2. 빌드·실행** (프로젝트 루트)
+
+```bash
+docker compose -f docker-compose.gpu.yml up --build
+```
+
+**3. GPU·버전 확인**
+
+```bash
+curl http://localhost:8000/api/health
+```
+
+`gpu.paddle_use_gpu: true`, `paddleocr` 3.x 버전이 보이면 정상입니다.
+
+컨테이너 안에서 상세 확인:
+
+```bash
+docker exec -it ocr-parser-poc-backend-gpu python scripts/verify_paddle_gpu.py
+```
+
+**4. OCR API 테스트**
+
+```bash
+curl -X POST http://localhost:8000/api/parse \
+  -F "file=@/path/to/test.png" \
+  -F "parser_id=PADDLEOCR" \
+  -F "preprocess_steps=[]" \
+  -F "postprocess_steps=[]"
+```
+
+**5. UI**
+
+브라우저 http://localhost:8080 → 파일 업로드 → **PaddleOCR** 선택 → 실행.
+
+**Windows 로컬 venv** 는 2.7 유지, 3.x는 Docker(Linux)에서만 사용합니다 (`paddle_engine`이 Windows pip 3.x는 차단).
 
 ## API
 
@@ -39,9 +87,9 @@ uvicorn app.main:app --reload --port 8000
 
 ## 파서 (확장자별 동적 노출)
 
-**이미지** (jpg/png/…): `TESSERACT_OCR`, `EASYOCR`, `PADDLEOCR`, `AUTO`
+**이미지** (jpg/png/…): `TESSERACT_OCR`, `EASYOCR`, `PADDLEOCR`
 
-**PDF**: `PDF_TEXT`, `PDF_TESSERACT_OCR`, `PDF_EASYOCR`, `PDF_PADDLEOCR`, `AUTO`
+**스캔 PDF**: `PDF_TESSERACT_OCR`, `PDF_EASYOCR`, `PDF_PADDLEOCR` (각 페이지를 이미지로 렌더링 후 OCR. 텍스트 레이어 PDF는 대상 아님)
 
 ## 전처리 단계 (필요 시)
 

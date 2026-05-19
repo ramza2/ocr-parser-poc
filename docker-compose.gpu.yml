@@ -1,0 +1,46 @@
+# PaddleOCR 3.x + GPU 백엔드
+# 사전 요구: NVIDIA 드라이버 + Docker NVIDIA Container Toolkit
+#   https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+#
+# 실행:
+#   docker compose -f docker-compose.gpu.yml up --build
+#   프론트만 로컬: docker compose -f docker-compose.gpu.yml up --build backend
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.gpu
+    container_name: ocr-parser-poc-backend-gpu
+    ports:
+      - "8000:8000"
+    gpus: all
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      EASYOCR_FORCE_CPU: "1"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ocr-parser-poc-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped

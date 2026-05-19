@@ -1,0 +1,11 @@
+# Dockerfile.gpu 공통 의존성 (Paddle 3.x: opencv-contrib 4.6 pin 대신 headless)
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+python-multipart>=0.0.12
+pypdf>=5.1.0
+Pillow>=11.0.0
+pytesseract>=0.3.13
+pdf2image>=1.17.0
+numpy>=1.26.0,<2.0
+opencv-python-headless>=4.8.0,<4.11
+# easyocr: Dockerfile.gpu 에서 CPU torch 설치 후 별도 설치 (Paddle GPU NCCL 충돌 방지)

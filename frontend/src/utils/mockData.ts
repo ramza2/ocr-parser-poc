@@ -2,7 +2,7 @@ import type { ParseResponse } from "../types/parser";
 
 export const MOCK_PARSE_RESULT: ParseResponse = {
   success: true,
-  parser_id: "TESSERACT_OCR",
+  parser_id: "PDF_EASYOCR",
   file_name: "sample_invoice_2023.pdf",
   extension: "pdf",
   elapsed_ms: 1240,
@@ -43,11 +43,12 @@ Thank you for your business.`,
   tables: [],
   logs: [
     { level: "INFO", message: "파일 업로드 완료", timestamp: "10:00:01" },
-    { level: "INFO", message: "PDF 텍스트 추출 시작", timestamp: "10:00:02" },
-    { level: "INFO", message: "페이지 1 처리 중...", timestamp: "10:00:02" },
-    { level: "INFO", message: "페이지 2 처리 중...", timestamp: "10:00:03" },
-    { level: "INFO", message: "페이지 3 처리 중...", timestamp: "10:00:03" },
-    { level: "INFO", message: "PDF 텍스트 추출 완료", timestamp: "10:00:04" },
+    { level: "INFO", message: "스캔 PDF 페이지 OCR (easyocr)", timestamp: "10:00:02" },
+    { level: "INFO", message: "스캔 PDF 3페이지 렌더링 완료", timestamp: "10:00:02" },
+    { level: "INFO", message: "페이지 1 OCR 중...", timestamp: "10:00:02" },
+    { level: "INFO", message: "페이지 2 OCR 중...", timestamp: "10:00:03" },
+    { level: "INFO", message: "페이지 3 OCR 중...", timestamp: "10:00:03" },
+    { level: "INFO", message: "스캔 PDF OCR 완료", timestamp: "10:00:04" },
   ],
   errors: [],
 };

@@ -5,9 +5,8 @@
 #   pip uninstall paddlepaddle paddleocr paddlex -y
 #   pip install -r requirements-paddle.txt
 #
-# 3.x를 유지하려면 아래 주석 해제 후 2.x 블록 주석 처리
-# paddlepaddle>=3.0.0
-# paddleocr>=3.5.0
+# PaddleOCR 3.x + GPU → Linux Docker: requirements-paddle-v3.txt + Dockerfile.gpu
+#   docker compose -f docker-compose.gpu.yml up --build
 
 numpy>=1.26.0,<2.0
 # GPU: paddlepaddle 대신 paddlepaddle-gpu==2.6.2 설치 (둘 중 하나만)

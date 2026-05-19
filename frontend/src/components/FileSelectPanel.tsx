@@ -49,7 +49,7 @@ export default function FileSelectPanel({
           파일을 드래그하거나 클릭하여 업로드
         </p>
         <p className="mt-1 text-xs text-slate-500">
-          PDF, JPG, PNG 지원 (최대 50MB)
+          스캔 PDF, JPG, PNG 지원 (최대 50MB)
         </p>
       </label>
 

@@ -21,12 +21,6 @@ import type {
 import { getExtension, isSupportedExtension } from "../utils/fileUtils";
 import { MOCK_PARSE_RESULT } from "../utils/mockData";
 
-const NO_PIPELINE_PARSERS = new Set(["PDF_TEXT"]);
-
-function supportsPipeline(parserId: string | null): boolean {
-  return !!parserId && !NO_PIPELINE_PARSERS.has(parserId);
-}
-
 export default function OcrParserPocPage() {
   const [allParsers, setAllParsers] = useState<ParserInfo[]>([]);
   const [availableParsers, setAvailableParsers] = useState<ParserInfo[]>([]);
@@ -132,12 +126,8 @@ export default function OcrParserPocPage() {
       return;
     }
 
-    const preprocess = supportsPipeline(selectedParserId)
-      ? selectedPreprocess
-      : [];
-    const postprocess = supportsPipeline(selectedParserId)
-      ? selectedPostprocess
-      : [];
+    const preprocess = selectedParserId ? selectedPreprocess : [];
+    const postprocess = selectedParserId ? selectedPostprocess : [];
 
     try {
       const response = await parseFile(
@@ -200,7 +190,7 @@ export default function OcrParserPocPage() {
     status !== "running";
 
   const pipelineEnabled =
-    !!selectedFile && supportsPipeline(selectedParserId) && status !== "running";
+    !!selectedFile && !!selectedParserId && status !== "running";
 
   const renderTabContent = () => {
     if (!result && status !== "running") {
@@ -255,7 +245,7 @@ export default function OcrParserPocPage() {
           <div>
             <h1 className="text-xl font-bold text-slate-900">OCR 파서 검증 PoC</h1>
             <p className="mt-0.5 text-sm text-slate-500">
-              OCR 엔진·전·후처리 비교
+              이미지·스캔 PDF OCR 엔진·전·후처리 비교
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -301,18 +291,13 @@ export default function OcrParserPocPage() {
               <h2 className="mb-2 text-sm font-semibold text-slate-800">
                 3. 전처리 · 후처리
               </h2>
-              {!supportsPipeline(selectedParserId) && selectedParserId && (
-                <p className="mb-2 text-xs text-slate-500">
-                  선택한 파서는 OCR 전·후처리를 사용하지 않습니다.
-                </p>
-              )}
               <PipelineOptionsPanel
                 title="전처리 (필요 시)"
                 steps={preprocessCatalog}
                 selected={selectedPreprocess}
                 onChange={setSelectedPreprocess}
                 disabled={!pipelineEnabled}
-                presetLabel="스캔 문서"
+                presetLabel="스캔 PDF"
                 onPreset={() => setSelectedPreprocess(presetScanned)}
                 onClear={() => setSelectedPreprocess([])}
               />
