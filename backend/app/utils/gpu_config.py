@@ -1,9 +1,26 @@
+"""
+GPU 사용 여부 판별 (엔진별로 독립).
+
+- Paddle: paddlepaddle-gpu 설치 + cuBLAS 등 CUDA DLL 실제 동작 여부 프로브
+- EasyOCR: torch.cuda.is_available() (Docker GPU 이미지는 EASYOCR_FORCE_CPU=1 권장)
+
+Windows 로컬: Paddle 2.7 + CUDA Toolkit PATH, Docker: Dockerfile.gpu (Paddle 3.3 cu126).
+"""
 from __future__ import annotations
 
+import os
+
+# 프로브 결과 캐시 (요청마다 CUDA 초기화 비용 절감)
 _paddle_gpu_ok: bool | None = None
 
 
 def easyocr_use_gpu() -> bool:
+    if os.environ.get("EASYOCR_FORCE_CPU", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    ):
+        return False
     try:
         import torch
 

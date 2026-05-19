@@ -1,3 +1,8 @@
+"""
+이미지 파일용 파서 — 엔진 ID만 다르고 처리는 ocr_pipeline.run_image_ocr 공통.
+
+_create_image_parser 로 Tesseract/Easy/Paddle 파서 클래스를 동적 생성한다.
+"""
 from app.parsers.base import ParseResult, ParserAdapter
 from app.services.ocr_pipeline import run_image_ocr
 

@@ -1,3 +1,9 @@
+/**
+ * OCR 파서 PoC 단일 페이지.
+ *
+ * 흐름: 파일 선택 → 확장자별 파서·파이프라인 로드 → 파서·전후처리 선택 → POST /api/parse
+ * Mock 모드: 백엔드 없이 UI만 검증 (MOCK_PARSE_RESULT)
+ */
 import { useCallback, useEffect, useState } from "react";
 import { fetchParsers, fetchPipelineSteps, parseFile } from "../api/parserApi";
 import ErrorResultView from "../components/ErrorResultView";
@@ -112,6 +118,7 @@ export default function OcrParserPocPage() {
     setStatus("running");
     setActiveTab("text");
 
+    // Mock: 네트워크 호출 없이 고정 샘플 응답
     if (useMock) {
       await new Promise((r) => setTimeout(r, 800));
       const mock = {

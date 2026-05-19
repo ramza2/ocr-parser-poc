@@ -1,3 +1,9 @@
+/**
+ * 백엔드 API 클라이언트.
+ *
+ * 개발: vite proxy → localhost:8000
+ * Docker: nginx 가 /api/* 를 backend:8000 으로 프록시 (상대 경로 /api 사용)
+ */
 import type {
   ParseResponse,
   ParserInfo,

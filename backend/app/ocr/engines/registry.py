@@ -1,3 +1,9 @@
+"""
+OCR 엔진 레지스트리 (파서와 별개).
+
+파서(parser_id)는 UI·권한·PDF 래핑 단위,
+엔진(engine_id: tesseract | easyocr | paddleocr)은 실제 추론 구현.
+"""
 from __future__ import annotations
 
 from app.ocr.engines.base import OcrEngine

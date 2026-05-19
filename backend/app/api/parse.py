@@ -1,3 +1,10 @@
+"""
+POST /api/parse — multipart 업로드 엔드포인트.
+
+Form 필드:
+  file, parser_id,
+  preprocess_steps / postprocess_steps — JSON 문자열 배열 (예: '["deskew","enhance"]')
+"""
 import json
 
 from fastapi import APIRouter, File, Form, UploadFile

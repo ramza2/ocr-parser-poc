@@ -1,3 +1,9 @@
+"""
+스캔 PDF용 파서 — 텍스트 레이어 추출 없음.
+
+pdf2image(convert_from_path) 로 페이지를 PNG 렌더한 뒤,
+페이지마다 run_image_ocr() 호출. Poppler(pdftoppm) 필요.
+"""
 import os
 import time
 
@@ -58,6 +64,7 @@ class _PdfOcrParserBase(ParserAdapter):
         all_logs = list(logs)
         combined: list[str] = []
 
+        # 업로드 임시 파일명 기준 옆에 페이지 PNG 생성 (요청 종료 시 upload temp 만 삭제됨)
         for idx, image in enumerate(images, start=1):
             temp_path = f"{file_path}_page_{idx}.png"
             image.save(temp_path, "PNG")

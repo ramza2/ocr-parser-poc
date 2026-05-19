@@ -1,3 +1,4 @@
+"""Tesseract 엔진 — 시스템 tesseract 바이너리 + kor+eng (options.lang/psm/oem)."""
 from __future__ import annotations
 
 from app.ocr.engines.base import OcrEngine

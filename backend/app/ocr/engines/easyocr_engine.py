@@ -1,3 +1,4 @@
+"""EasyOCR 엔진. Reader 싱글톤(_reader) — 첫 로드 시 모델 다운로드·초기화."""
 from __future__ import annotations
 
 from app.ocr.engines.base import OcrEngine

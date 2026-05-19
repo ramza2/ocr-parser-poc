@@ -1,5 +1,12 @@
 # PaddleOCR 3.x + GPU (NVIDIA Container Toolkit 필요)
+#
+# 스택 요약:
+#   - Paddle 3.3 cu126 (GPU OCR 주력)
+#   - EasyOCR 은 CPU torch 만 설치 (CUDA torch ↔ Paddle NCCL 충돌 방지)
+#   - apt: tesseract, poppler, libgl1(OpenCV/Paddle)
+#
 # 빌드: docker compose -f docker-compose.gpu.yml build backend
+# 실행: docker compose -f docker-compose.gpu.yml up  → UI http://localhost:8080
 FROM python:3.12-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

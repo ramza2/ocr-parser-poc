@@ -1,3 +1,4 @@
+"""전처리 단계를 순서대로 적용. step_id → PREPROCESS_STEP_FUNCS (steps.py)."""
 from __future__ import annotations
 
 import tempfile

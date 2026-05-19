@@ -1,3 +1,9 @@
+"""
+전·후처리 단계 메타데이터 (UI 체크박스·프리셋).
+
+실제 처리 로직: app/ocr/preprocess/steps.py, postprocess/steps.py
+GET /api/pipeline-steps 가 이 카탈로그를 JSON 으로 내려준다.
+"""
 from __future__ import annotations
 
 from pydantic import BaseModel

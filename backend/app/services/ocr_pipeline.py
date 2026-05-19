@@ -1,3 +1,11 @@
+"""
+이미지 1장에 대한 OCR 공통 파이프라인.
+
+  전처리(선택) → OCR 엔진 → 후처리(선택) → ParseResult
+
+이미지 파서·PDF 파서(페이지 루프) 모두 run_image_ocr() 를 호출한다.
+options 키: preprocess_steps, postprocess_steps, ocr_options (JSON 배열 문자열도 허용).
+"""
 from __future__ import annotations
 
 import os
@@ -80,6 +88,7 @@ def run_image_ocr(
         if work_path != image_path:
             temp_pre = work_path
 
+        # work_path: 전처리 시 임시 PNG, 없으면 원본 경로
         text, blocks = engine.recognize(work_path, ocr_opts)
         text, post_logs = apply_postprocess(
             text, postprocess_steps, options, blocks=blocks

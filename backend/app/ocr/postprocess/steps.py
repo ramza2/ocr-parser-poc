@@ -1,3 +1,8 @@
+"""
+후처리 step 구현체. step_id → POSTPROCESS_STEP_FUNCS.
+
+strip_normalize / format_rules / char_correct / layout_order(bbox 정렬)
+"""
 from __future__ import annotations
 
 import re

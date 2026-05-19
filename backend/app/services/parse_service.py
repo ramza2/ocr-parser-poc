@@ -1,3 +1,9 @@
+"""
+업로드 검증 + 파서 실행 + API 응답(ParseResponse) 변환.
+
+흐름: validate_parse_request → parser.parse → to_response
+에러 코드는 schemas.parser.ErrorItem.code (UNSUPPORTED_EXTENSION, EMPTY_RESULT 등).
+"""
 from app.parsers.base import ParseResult
 from app.schemas.parser import PageResult, ParseResponse
 from app.services import parser_registry

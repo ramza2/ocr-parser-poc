@@ -1,3 +1,4 @@
+"""후처리 단계를 순서대로 적용. layout_order 는 blocks(bbox) 가 필요."""
 from __future__ import annotations
 
 from app.ocr.postprocess.steps import POSTPROCESS_STEP_FUNCS

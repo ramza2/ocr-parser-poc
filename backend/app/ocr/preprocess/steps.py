@@ -1,3 +1,8 @@
+"""
+전처리 step 구현체. step_id → 함수 매핑은 PREPROCESS_STEP_FUNCS.
+
+deskew / enhance / binarize / crop_roi — pipeline_catalog 와 ID 일치 유지.
+"""
 from __future__ import annotations
 
 from collections.abc import Callable

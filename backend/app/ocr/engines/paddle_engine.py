@@ -1,8 +1,19 @@
+"""
+PaddleOCR 엔진 어댑터.
+
+버전 분기:
+  - 2.x: ocr() API, use_gpu, 결과 [[bbox, (text, conf)], ...]
+  - 3.x: predict() API, device=gpu:0, 결과 json 의 res.rec_texts (Docker GPU 스택)
+
+Windows pip 3.x 는 oneDNN 이슈로 _windows_blocks_v3() 가 차단.
+싱글톤 _ocr: 첫 요청 시 모델 로드(수 초~수십 초).
+"""
 from __future__ import annotations
 
 import os
 import sys
 
+# Paddle 3.x / Windows oneDNN 관련 환경 기본값
 os.environ.setdefault("FLAGS_use_mkldnn", "0")
 os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
 
@@ -108,6 +119,24 @@ def _parse_v2_result(result) -> tuple[list[str], list[dict]]:
     return lines, blocks
 
 
+def _v3_item_to_dict(item) -> dict | None:
+    """PaddleOCR 3.x Result → dict (json 속성은 {'res': {...}} 형태)."""
+    if isinstance(item, dict):
+        return item
+    json_attr = getattr(item, "json", None)
+    if json_attr is None:
+        return None
+    if callable(json_attr):
+        return json_attr()
+    return json_attr if isinstance(json_attr, dict) else None
+
+
+def _unwrap_v3_payload(data: dict) -> dict:
+    # PaddleOCR 3.x json: {"res": {"rec_texts": [...], ...}} — 최상위가 아닌 res 안을 읽어야 함
+    inner = data.get("res")
+    return inner if isinstance(inner, dict) else data
+
+
 def _parse_v3_result(raw) -> tuple[list[str], list[dict]]:
     lines: list[str] = []
     blocks: list[dict] = []
@@ -116,20 +145,17 @@ def _parse_v3_result(raw) -> tuple[list[str], list[dict]]:
 
     items = raw if isinstance(raw, list) else [raw]
     for item in items:
-        data = getattr(item, "json", None)
-        if callable(data):
-            data = data()
-        if data is None:
-            data = item if isinstance(item, dict) else {}
+        data = _v3_item_to_dict(item)
         if not isinstance(data, dict):
             continue
+        data = _unwrap_v3_payload(data)
 
         texts = data.get("rec_texts") or []
         scores = data.get("rec_scores") or []
-        polys = data.get("rec_polys") or data.get("dt_polys") or []
+        polys = data.get("rec_polys") or data.get("dt_polys") or data.get("rec_boxes") or []
 
         for i, text in enumerate(texts):
-            if not text:
+            if text is None or str(text).strip() == "":
                 continue
             lines.append(str(text))
             conf = scores[i] if i < len(scores) else None
@@ -191,4 +217,4 @@ class PaddleOcrEngine(OcrEngine):
                 raise
 
         return "\n".join(lines).strip(), blocks
-
+

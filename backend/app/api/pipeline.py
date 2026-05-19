@@ -1,3 +1,4 @@
+"""GET /api/pipeline-steps?extension=png — 전·후처리 UI 옵션·프리셋."""
 from fastapi import APIRouter, Query
 
 from app.services.pipeline_catalog import (

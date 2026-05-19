@@ -1,3 +1,14 @@
+"""
+OCR Parser PoC — FastAPI 진입점.
+
+라우터 구성:
+  /api/health         서버·GPU 상태
+  /api/parsers        확장자별 사용 가능 파서 목록
+  /api/pipeline-steps 전·후처리 단계 카탈로그
+  /api/parse          파일 업로드 + OCR 실행 (multipart)
+
+PoC 특성상 예외도 HTTP 200 + ParseResponse.errors 로 반환하는 경우가 많음.
+"""
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -8,6 +19,7 @@ from app.schemas.parser import ErrorItem, ParseResponse
 app = FastAPI(title="OCR Parser PoC API", version="0.1.0")
 
 
+# 프론트가 항상 JSON ParseResponse 를 기대하므로 500 대신 200 + INTERNAL_ERROR
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
