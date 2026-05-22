@@ -9,8 +9,9 @@
 #   docker compose -f docker-compose.gpu.yml up --build
 
 numpy>=1.26.0,<2.0
-# GPU: paddlepaddle 대신 paddlepaddle-gpu==2.6.2 설치 (둘 중 하나만)
-# paddlepaddle==2.6.2
+# Docker CPU(Dockerfile): paddlepaddle CPU wheel
+# Windows/Linux GPU: paddlepaddle-gpu 는 Dockerfile.gpu 에서 별도 설치 (둘 중 하나만)
+paddlepaddle==2.6.2
 opencv-contrib-python==4.6.0.66
 opencv-python==4.6.0.66
 paddleocr==2.7.3
