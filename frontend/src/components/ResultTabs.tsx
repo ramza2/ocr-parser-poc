@@ -5,7 +5,6 @@ const TABS: { id: ResultTab; label: string }[] = [
   { id: "json", label: "JSON 결과" },
   { id: "log", label: "로그" },
   { id: "error", label: "오류" },
-  { id: "compare", label: "파서 비교" },
 ];
 
 interface Props {

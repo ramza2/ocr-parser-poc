@@ -2,7 +2,6 @@
  * OCR 파서 PoC 단일 페이지.
  *
  * 흐름: 파일 선택 → 확장자별 파서·파이프라인 로드 → 파서·전후처리 선택 → POST /api/parse
- * Mock 모드: 백엔드 없이 UI만 검증 (MOCK_PARSE_RESULT)
  */
 import { useCallback, useEffect, useState } from "react";
 import { fetchParsers, fetchPipelineSteps, parseFile } from "../api/parserApi";
@@ -25,7 +24,6 @@ import type {
   SelectedFileInfo,
 } from "../types/parser";
 import { getExtension, isSupportedExtension } from "../utils/fileUtils";
-import { MOCK_PARSE_RESULT } from "../utils/mockData";
 
 export default function OcrParserPocPage() {
   const [allParsers, setAllParsers] = useState<ParserInfo[]>([]);
@@ -35,7 +33,6 @@ export default function OcrParserPocPage() {
   const [result, setResult] = useState<ParseResponse | null>(null);
   const [status, setStatus] = useState<RunStatus>("idle");
   const [activeTab, setActiveTab] = useState<ResultTab>("text");
-  const [useMock, setUseMock] = useState(false);
   const [apiOnline, setApiOnline] = useState<boolean | null>(null);
   const [preprocessCatalog, setPreprocessCatalog] = useState<PipelineStepInfo[]>(
     []
@@ -117,21 +114,6 @@ export default function OcrParserPocPage() {
 
     setStatus("running");
     setActiveTab("text");
-
-    // Mock: 네트워크 호출 없이 고정 샘플 응답
-    if (useMock) {
-      await new Promise((r) => setTimeout(r, 800));
-      const mock = {
-        ...MOCK_PARSE_RESULT,
-        parser_id: selectedParserId,
-        file_name: selectedFile.name,
-        extension: selectedFile.extension,
-      };
-      setResult(mock);
-      setStatus(mock.success ? "success" : "failed");
-      if (!mock.success || mock.error_count > 0) setActiveTab("error");
-      return;
-    }
 
     const preprocess = selectedParserId ? selectedPreprocess : [];
     const postprocess = selectedParserId ? selectedPostprocess : [];
@@ -230,16 +212,6 @@ export default function OcrParserPocPage() {
         return <LogResultView logs={result.logs} />;
       case "error":
         return <ErrorResultView errors={result.errors} />;
-      case "compare":
-        return (
-          <section className="rounded-xl border border-amber-200 bg-amber-50 p-6">
-            <h3 className="text-sm font-semibold text-amber-900">파서 비교</h3>
-            <p className="mt-2 text-sm text-amber-800">
-              동일 파일로 Tesseract / EasyOCR / PaddleOCR 등 파서를 바꿔 실행하고
-              결과를 비교해 주세요.
-            </p>
-          </section>
-        );
       default:
         return null;
     }
@@ -256,15 +228,6 @@ export default function OcrParserPocPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-600">
-              <input
-                type="checkbox"
-                checked={useMock}
-                onChange={(e) => setUseMock(e.target.checked)}
-                className="rounded border-slate-300"
-              />
-              Mock 모드
-            </label>
             <span className="rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-700">
               PoC Mode
             </span>

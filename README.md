@@ -91,10 +91,6 @@ docker compose down
 
 **전처리/후처리:** 체크박스로 단계 선택 (튜토리얼 프리셋: 확대→grayscale→binary→erosion→dilation). OCR 파서에만 적용.
 
-## Mock 모드
-
-백엔드 없이 UI만 확인하려면 헤더의 **Mock 모드**를 켠 뒤 파서를 실행하세요.
-
 ## 선택 설치 (OCR)
 
 - [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) + 한글 데이터 (`kor`)
