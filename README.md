@@ -89,6 +89,20 @@ docker compose down
 
 **스캔 PDF:** `PDF_TESSERACT_OCR` · `PDF_EASYOCR` · `PDF_PADDLEOCR` · `PDF_AIHUB_SWIN_OCR` (페이지를 이미지로 렌더링 후 OCR)
 
+## VLM 엔진 (UI 상단 "VLM" 탭)
+
+Vision Language Model 기반 OCR — 문맥을 이해하는 차세대 문서 AI.
+
+| 엔진 | 모델 | VRAM | 특성 |
+|------|------|------|------|
+| Qwen2.5-VL | Qwen/Qwen2.5-VL-7B-Instruct | ~8GB | 한국어 최강, Schema 추출/Q&A |
+| GOT-OCR 2.0 | stepfun-ai/GOT-OCR-2.0-hf | ~6GB | OCR 특화, 수식/표 |
+| Florence-2 | microsoft/Florence-2-large | ~2GB | 경량, Bounding Box 내장 |
+
+**기능:** 전체 OCR · Schema 기반 Key-Value 추출 · 문서 Q&A · Confidence 시각화 · Bounding Box 오버레이
+
+**요구사항:** GPU (최소 RTX 3060 12GB), 모델은 최초 실행 시 HuggingFace 에서 자동 다운로드.
+
 ### AI Hub CRAFT + Swin-Transformer OCR
 
 AI Hub 공공 OCR 데이터에서 제공하는 2단계 모델입니다.

@@ -30,7 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY requirements-docker-gpu-base.txt requirements-paddle-v3.txt requirements-aihub.txt ./
+COPY requirements-docker-gpu-base.txt requirements-paddle-v3.txt requirements-aihub.txt requirements-vlm.txt ./
 
 # 공통 의존성 (< 버전은 requirements 파일에만 기재)
 RUN pip install --upgrade pip \
@@ -48,6 +48,10 @@ RUN pip install -r requirements-paddle-v3.txt
 
 # AI Hub CRAFT + Swin-Transformer OCR 의존성
 RUN pip install -r requirements-aihub.txt
+
+# VLM 엔진 의존성 (Qwen2.5-VL, GOT-OCR, Florence-2)
+RUN pip install -r requirements-vlm.txt \
+    && pip install bitsandbytes>=0.44.0 || true
 
 COPY app ./app
 

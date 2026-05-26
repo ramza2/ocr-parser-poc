@@ -1,0 +1,11 @@
+# VLM 엔진 의존성 — GPU 환경 권장
+# torch 는 기존 requirements 또는 별도 설치 가정
+
+transformers>=4.45.0
+accelerate>=0.34.0
+qwen-vl-utils>=0.0.8
+Pillow>=10.0.0
+
+# 4-bit 양자화 (Linux GPU 환경에서만 지원)
+# Windows 에서는 설치 실패할 수 있으므로 선택적
+# bitsandbytes>=0.44.0

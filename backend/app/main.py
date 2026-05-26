@@ -13,7 +13,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import health, parse, parsers, pipeline
+from app.api import health, parse, parsers, pipeline, vlm
 from app.schemas.parser import ErrorItem, ParseResponse
 
 app = FastAPI(title="OCR Parser PoC API", version="0.1.0")
@@ -58,3 +58,4 @@ app.include_router(health.router, prefix="/api", tags=["health"])
 app.include_router(parsers.router, prefix="/api", tags=["parsers"])
 app.include_router(parse.router, prefix="/api", tags=["parse"])
 app.include_router(pipeline.router, prefix="/api", tags=["pipeline"])
+app.include_router(vlm.router, prefix="/api", tags=["vlm"])

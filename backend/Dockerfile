@@ -15,11 +15,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY requirements.txt requirements-paddle.txt requirements-aihub.txt ./
+COPY requirements.txt requirements-paddle.txt requirements-aihub.txt requirements-vlm.txt ./
 # paddle 설치 실패 시 빌드 중단 (|| true 제거 — 런타임 No module named 'paddle' 방지)
 RUN pip install -r requirements.txt \
     && pip install -r requirements-paddle.txt \
-    && pip install -r requirements-aihub.txt
+    && pip install -r requirements-aihub.txt \
+    && pip install -r requirements-vlm.txt || true
 
 COPY app ./app
 

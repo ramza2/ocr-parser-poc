@@ -218,28 +218,7 @@ export default function OcrParserPocPage() {
   };
 
   return (
-    <div className="min-h-screen">
-      <header className="border-b border-slate-200 bg-white px-6 py-4 shadow-sm">
-        <div className="mx-auto flex max-w-[1680px] items-start justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-slate-900">OCR 파서 검증 PoC</h1>
-            <p className="mt-0.5 text-sm text-slate-500">
-              이미지·스캔 PDF OCR 엔진·전·후처리 비교
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-700">
-              PoC Mode
-            </span>
-            {apiOnline === false && (
-              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
-                API 오프라인
-              </span>
-            )}
-          </div>
-        </div>
-      </header>
-
+    <div className="flex-1">
       <div className="mx-auto flex max-w-[1680px] gap-0">
         <aside className="w-[400px] shrink-0 overflow-y-auto border-r border-slate-200 bg-white p-5">
           <FileSelectPanel
@@ -309,6 +288,12 @@ export default function OcrParserPocPage() {
           </div>
         </main>
       </div>
+
+      {apiOnline === false && (
+        <div className="fixed bottom-4 right-4 rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700 shadow">
+          API 오프라인
+        </div>
+      )}
     </div>
   );
 }
