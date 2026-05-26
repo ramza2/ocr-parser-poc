@@ -61,3 +61,10 @@ PaddleOcrParser = _create_image_parser(
     "이미지 파일에서 문자를 인식합니다.",
     "paddleocr",
 )
+
+AihubSwinOcrParser = _create_image_parser(
+    "AIHUB_SWIN_OCR",
+    "AI Hub CRAFT+Swin (이미지)",
+    "CRAFT 텍스트 검출 + Swin-Transformer 인식. 한글·한자·영어 대응.",
+    "aihub_swin",
+)

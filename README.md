@@ -85,9 +85,26 @@ docker compose down
 
 ## 파서 (파일 확장자에 따라 UI에 동적 표시)
 
-**이미지:** `TESSERACT_OCR` · `EASYOCR` · `PADDLEOCR`
+**이미지:** `TESSERACT_OCR` · `EASYOCR` · `PADDLEOCR` · `AIHUB_SWIN_OCR`
 
-**스캔 PDF:** `PDF_TESSERACT_OCR` · `PDF_EASYOCR` · `PDF_PADDLEOCR` (페이지를 이미지로 렌더링 후 OCR)
+**스캔 PDF:** `PDF_TESSERACT_OCR` · `PDF_EASYOCR` · `PDF_PADDLEOCR` · `PDF_AIHUB_SWIN_OCR` (페이지를 이미지로 렌더링 후 OCR)
+
+### AI Hub CRAFT + Swin-Transformer OCR
+
+AI Hub 공공 OCR 데이터에서 제공하는 2단계 모델입니다.
+
+1. **CRAFT** — VGG16-BN 백본으로 문자 영역(바운딩 박스) 검출
+2. **Swin-Transformer** — 각 영역을 크롭하여 문자 인식
+
+모델 가중치 3개를 `backend/models/aihub/` 에 배치해야 합니다:
+
+| 파일 | 설명 |
+|------|------|
+| `craft.ckpt` | CRAFT 텍스트 검출 가중치 |
+| `swin_transformer.ckpt` | Swin 문자 인식 가중치 |
+| `token.pkl` | Swin 토크나이저 (문자↔ID 매핑) |
+
+환경변수 `AIHUB_MODEL_DIR` 로 경로를 변경할 수 있습니다.
 
 **전처리/후처리:** 체크박스로 단계 선택 (튜토리얼 프리셋: 확대→grayscale→binary→erosion→dilation). OCR 파서에만 적용.
 

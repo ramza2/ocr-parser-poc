@@ -30,7 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY requirements-docker-gpu-base.txt requirements-paddle-v3.txt ./
+COPY requirements-docker-gpu-base.txt requirements-paddle-v3.txt requirements-aihub.txt ./
 
 # 공통 의존성 (< 버전은 requirements 파일에만 기재)
 RUN pip install --upgrade pip \
@@ -46,7 +46,13 @@ RUN pip install paddlepaddle-gpu==3.3.0 \
 
 RUN pip install -r requirements-paddle-v3.txt
 
+# AI Hub CRAFT + Swin-Transformer OCR 의존성
+RUN pip install -r requirements-aihub.txt
+
 COPY app ./app
+
+# AI Hub 모델 가중치 (빌드 시 models/aihub/ 에 파일이 있으면 복사)
+COPY models/aihub/ ./models/aihub/
 
 EXPOSE 8000
 

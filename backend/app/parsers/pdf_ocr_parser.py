@@ -170,3 +170,10 @@ PdfPaddleOcrParser = _create_pdf_ocr_parser(
     "스캔 PDF 각 페이지를 이미지로 렌더링한 뒤 OCR합니다. (텍스트 레이어 PDF는 대상 아님)",
     "paddleocr",
 )
+
+PdfAihubSwinOcrParser = _create_pdf_ocr_parser(
+    "PDF_AIHUB_SWIN_OCR",
+    "AI Hub CRAFT+Swin (스캔 PDF)",
+    "스캔 PDF를 이미지로 렌더링한 뒤 CRAFT+Swin OCR. (텍스트 레이어 PDF는 대상 아님)",
+    "aihub_swin",
+)

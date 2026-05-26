@@ -87,9 +87,15 @@ curl -X POST http://localhost:8000/api/parse \
 
 ## 파서 (확장자별 동적 노출)
 
-**이미지** (jpg/png/…): `TESSERACT_OCR`, `EASYOCR`, `PADDLEOCR`
+**이미지** (jpg/png/…): `TESSERACT_OCR`, `EASYOCR`, `PADDLEOCR`, `AIHUB_SWIN_OCR`
 
-**스캔 PDF**: `PDF_TESSERACT_OCR`, `PDF_EASYOCR`, `PDF_PADDLEOCR` (각 페이지를 이미지로 렌더링 후 OCR. 텍스트 레이어 PDF는 대상 아님)
+**스캔 PDF**: `PDF_TESSERACT_OCR`, `PDF_EASYOCR`, `PDF_PADDLEOCR`, `PDF_AIHUB_SWIN_OCR` (각 페이지를 이미지로 렌더링 후 OCR. 텍스트 레이어 PDF는 대상 아님)
+
+### AI Hub CRAFT + Swin-Transformer
+
+CRAFT(텍스트 검출) + Swin-Transformer(문자 인식) 2단계 파이프라인.
+모델 가중치 3개(`craft.ckpt`, `swin_transformer.ckpt`, `token.pkl`)를 `models/aihub/` 에 배치 후 사용.
+환경변수 `AIHUB_MODEL_DIR` 로 경로 변경 가능. 추가 의존성은 `requirements-aihub.txt`.
 
 ## 전처리 단계 (필요 시)
 

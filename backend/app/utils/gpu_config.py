@@ -55,11 +55,21 @@ def reset_paddle_gpu_cache() -> None:
     _paddle_gpu_ok = None
 
 
+def aihub_use_gpu() -> bool:
+    try:
+        import torch
+        return torch.cuda.is_available()
+    except ImportError:
+        return False
+
+
 def engine_device_label(engine_id: str) -> str | None:
     if engine_id == "easyocr":
         return f"EasyOCR: {'GPU' if easyocr_use_gpu() else 'CPU'}"
     if engine_id == "paddleocr":
         return f"PaddleOCR: {'GPU' if paddle_use_gpu() else 'CPU'}"
+    if engine_id == "aihub_swin":
+        return f"AI Hub CRAFT+Swin: {'GPU' if aihub_use_gpu() else 'CPU'}"
     return None
 
 

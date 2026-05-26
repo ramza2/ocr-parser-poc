@@ -8,8 +8,14 @@
 새 파서 추가 시: ParserAdapter 구현 → PARSERS 등록 → EXTENSION_PARSER_MAP 에 ID 추가.
 """
 from app.parsers.base import ParserAdapter
-from app.parsers.ocr_image_parser import EasyOcrParser, PaddleOcrParser, TesseractOcrParser
+from app.parsers.ocr_image_parser import (
+    AihubSwinOcrParser,
+    EasyOcrParser,
+    PaddleOcrParser,
+    TesseractOcrParser,
+)
 from app.parsers.pdf_ocr_parser import (
+    PdfAihubSwinOcrParser,
     PdfEasyOcrParser,
     PdfPaddleOcrParser,
     PdfTesseractOcrParser,
@@ -21,9 +27,11 @@ PARSERS: dict[str, ParserAdapter] = {
     "TESSERACT_OCR": TesseractOcrParser,
     "EASYOCR": EasyOcrParser,
     "PADDLEOCR": PaddleOcrParser,
+    "AIHUB_SWIN_OCR": AihubSwinOcrParser,
     "PDF_TESSERACT_OCR": PdfTesseractOcrParser,
     "PDF_EASYOCR": PdfEasyOcrParser,
     "PDF_PADDLEOCR": PdfPaddleOcrParser,
+    "PDF_AIHUB_SWIN_OCR": PdfAihubSwinOcrParser,
 }
 
 # 확장자별 UI 노출 순서 (docx 등 문서 파서 없음 — OCR 이미지·스캔 PDF 전용)
@@ -32,12 +40,13 @@ EXTENSION_PARSER_MAP: dict[str, list[str]] = {
         "PDF_TESSERACT_OCR",
         "PDF_EASYOCR",
         "PDF_PADDLEOCR",
+        "PDF_AIHUB_SWIN_OCR",
     ],
-    "jpg": ["TESSERACT_OCR", "EASYOCR", "PADDLEOCR"],
-    "jpeg": ["TESSERACT_OCR", "EASYOCR", "PADDLEOCR"],
-    "png": ["TESSERACT_OCR", "EASYOCR", "PADDLEOCR"],
-    "tif": ["TESSERACT_OCR", "EASYOCR", "PADDLEOCR"],
-    "tiff": ["TESSERACT_OCR", "EASYOCR", "PADDLEOCR"],
+    "jpg": ["TESSERACT_OCR", "EASYOCR", "PADDLEOCR", "AIHUB_SWIN_OCR"],
+    "jpeg": ["TESSERACT_OCR", "EASYOCR", "PADDLEOCR", "AIHUB_SWIN_OCR"],
+    "png": ["TESSERACT_OCR", "EASYOCR", "PADDLEOCR", "AIHUB_SWIN_OCR"],
+    "tif": ["TESSERACT_OCR", "EASYOCR", "PADDLEOCR", "AIHUB_SWIN_OCR"],
+    "tiff": ["TESSERACT_OCR", "EASYOCR", "PADDLEOCR", "AIHUB_SWIN_OCR"],
 }
 
 

@@ -1,0 +1,6 @@
+# AI Hub CRAFT + Swin-Transformer OCR 엔진 추가 의존성
+# torch, torchvision 은 EasyOCR/Paddle 설치에 포함되어 별도 기재하지 않음
+timm>=0.9.0
+x-transformers>=1.27.0
+shapely>=2.0.0
+easydict>=1.13
