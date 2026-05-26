@@ -11,7 +11,6 @@ import math
 import numpy as np
 import cv2
 from shapely.geometry import Polygon
-from shapely.strtree import STRtree
 
 
 def order_points(box: np.ndarray) -> np.ndarray:
@@ -28,12 +27,10 @@ def _link_to_word_bbox(to_find, word_bbox):
         return [np.zeros([0, 4, 1, 2], dtype=np.int32)]
 
     word_sorted_character: list[list] = [[] for _ in word_bbox]
-    compare_word_polygons = []
-    for word in word_bbox:
-        compare_word_polygons.append(
-            Polygon(word.reshape([word.shape[0], 2])).buffer(0)
-        )
-    tree = STRtree(compare_word_polygons)
+    word_polygons = [
+        Polygon(word.reshape([word.shape[0], 2])).buffer(0)
+        for word in word_bbox
+    ]
 
     for cont in to_find:
         if cont.shape[0] < 4:
@@ -48,14 +45,13 @@ def _link_to_word_bbox(to_find, word_bbox):
             continue
 
         ratio_arr = []
-        for b in tree.query_items(a):
-            ratio_arr.append(
-                (tree._geoms[b].intersection(a).area / a.area, b)
-            )
+        for idx, wp in enumerate(word_polygons):
+            if a.intersects(wp):
+                ratio_arr.append((wp.intersection(a).area / a.area, idx))
         ratio_arr = sorted(ratio_arr, key=lambda x: (-x[0], x[1]))
         if ratio_arr:
-            idx = 0 if ratio_arr[0][0] == 0.0 else ratio_arr[0][1]
-            word_sorted_character[idx].append(ordered_bbox)
+            best_idx = 0 if ratio_arr[0][0] == 0.0 else ratio_arr[0][1]
+            word_sorted_character[best_idx].append(ordered_bbox)
         else:
             word_sorted_character[0].append(ordered_bbox)
 

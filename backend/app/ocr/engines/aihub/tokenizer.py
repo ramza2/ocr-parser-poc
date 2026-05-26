@@ -4,11 +4,13 @@ AI Hub Swin-Transformer 토크나이저.
 원본: AI Hub 공공 OCR 데이터 — swin_transformer/dataset.py Tokenizer 클래스 (MIT License)
 
 token.pkl 파일에서 pickle 로 로드된 dict(token2id, id2token) 를 감싸는 래퍼.
+원본 pickle 이 'dataset.Tokenizer' 모듈 경로를 참조하므로
+_TokenizerUnpickler 로 우리 Tokenizer 클래스로 리다이렉트한다.
 """
 from __future__ import annotations
 
+import io
 import pickle
-import sys
 from pathlib import Path
 
 
@@ -40,17 +42,27 @@ class Tokenizer:
         return texts
 
 
+# pickle 이 참조할 수 있는 원본 모듈 경로들
+_REDIRECT_MODULES = {
+    ("dataset", "Tokenizer"),
+    ("swin_transformer.dataset", "Tokenizer"),
+}
+
+
+class _TokenizerUnpickler(pickle.Unpickler):
+    """원본 pickle 의 모듈 경로(dataset.Tokenizer 등)를 우리 Tokenizer 로 치환."""
+
+    def find_class(self, module: str, name: str):
+        if (module, name) in _REDIRECT_MODULES:
+            return Tokenizer
+        return super().find_class(module, name)
+
+
 def load_tokenizer(path: str | Path) -> Tokenizer:
-    """pickle 파일에서 Tokenizer 로드. dataset 모듈 경로 누락 대비 sys.path 보정."""
+    """pickle 파일에서 Tokenizer 로드. 원본 모듈 경로를 자동 리다이렉트."""
     path = Path(path)
-    try:
-        with open(path, "rb") as f:
-            obj = pickle.load(f)
-    except ModuleNotFoundError:
-        sys.path.insert(0, str(path.parent))
-        with open(path, "rb") as f:
-            obj = pickle.load(f)
-        sys.path.pop(0)
+    with open(path, "rb") as f:
+        obj = _TokenizerUnpickler(f).load()
 
     if isinstance(obj, Tokenizer):
         return obj

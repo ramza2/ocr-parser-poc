@@ -57,6 +57,16 @@ def _ensure_models():
     except ImportError:
         _load_error = "PyTorch 미설치. pip install torch torchvision"
         raise ImportError(_load_error)
+    except OSError as exc:
+        if "already registered" in str(exc).lower() or "shm.dll" in str(exc).lower():
+            _load_error = (
+                "Windows: PaddlePaddle이 먼저 로드되어 PyTorch를 사용할 수 없습니다 "
+                "(pybind11 타입 충돌). 서버를 재시작한 뒤 AI Hub 엔진을 먼저 사용하거나, "
+                "Docker(Linux)에서는 이 문제가 발생하지 않습니다."
+            )
+        else:
+            _load_error = f"PyTorch 로드 실패: {exc}"
+        raise ImportError(_load_error) from exc
 
     model_dir = _default_model_dir()
     craft_path = model_dir / _CRAFT_CKPT
@@ -93,8 +103,9 @@ def _ensure_models():
         _craft = craft_model
         logger.info("CRAFT 검출 모델 로드 완료")
     except Exception as exc:
-        _load_error = f"CRAFT 모델 로드 실패: {exc}"
-        raise ImportError(_load_error) from exc
+        err = f"CRAFT 모델 로드 실패: {exc}"
+        _load_error = err
+        raise ImportError(err) from exc
 
     try:
         tokenizer = load_tokenizer(str(token_path))
@@ -105,8 +116,10 @@ def _ensure_models():
         _swin = swin_model
         logger.info("Swin-Transformer 인식 모델 로드 완료 (vocab=%d)", len(tokenizer))
     except Exception as exc:
-        _load_error = f"Swin-Transformer 모델 로드 실패: {exc}"
-        raise ImportError(_load_error) from exc
+        _craft = None
+        err = f"Swin-Transformer 모델 로드 실패: {exc}"
+        _load_error = err
+        raise ImportError(err) from exc
 
 
 class AihubSwinEngine(OcrEngine):

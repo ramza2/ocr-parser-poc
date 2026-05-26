@@ -1,6 +1,11 @@
 # AI Hub CRAFT + Swin-Transformer OCR 엔진 추가 의존성
 # torch, torchvision 은 EasyOCR/Paddle 설치에 포함되어 별도 기재하지 않음
-timm>=0.9.0
-x-transformers>=1.27.0
-shapely>=2.0.0
-easydict>=1.13
+#
+# !! 버전 고정 필수 !!
+# 체크포인트가 이 버전으로 학습됨 — 버전 변경 시 state_dict 키 불일치 발생
+timm==0.4.12
+x-transformers==0.20.4
+# entmax: torch 설치 후 필요 시 별도 설치 (pip install entmax==1.0)
+# 미설치 시 swin_model.py 에서 softmax 로 자동 fallback
+shapely>=1.8.0
+easydict>=1.10

@@ -30,7 +30,14 @@ def _paddle_import_error(exc: BaseException) -> ImportError:
     ver = f"{sys.version_info.major}.{sys.version_info.minor}"
     detail = str(exc).strip() or type(exc).__name__
     dl = detail.lower()
-    if "libgl.so" in dl:
+    if "already registered" in dl:
+        hint = (
+            "Windows: PyTorch(AI Hub 엔진)와 PaddlePaddle은 같은 프로세스에서 "
+            "동시 사용 불가 (pybind11 타입 충돌). "
+            "서버를 재시작한 뒤 PaddleOCR을 먼저 사용하거나, "
+            "Docker(Linux)에서는 이 문제가 발생하지 않습니다."
+        )
+    elif "libgl.so" in dl:
         hint = (
             "Docker: OpenCV/Paddle용 libGL 누락. "
             "docker compose -f docker-compose.gpu.yml build --no-cache backend"

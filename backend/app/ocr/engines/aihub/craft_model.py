@@ -28,10 +28,23 @@ class _VGG16BN(nn.Module):
     def __init__(self):
         super().__init__()
         vgg = models.vgg16_bn(weights=None).features
-        self.slice1 = nn.Sequential(*[vgg[x] for x in range(12)])
-        self.slice2 = nn.Sequential(*[vgg[x] for x in range(12, 19)])
-        self.slice3 = nn.Sequential(*[vgg[x] for x in range(19, 29)])
-        self.slice4 = nn.Sequential(*[vgg[x] for x in range(29, 39)])
+
+        # 원본 체크포인트가 VGG features 의 원래 인덱스(str(x))를 키로 사용하므로
+        # add_module(str(x), ...) 로 동일한 키를 유지해야 state_dict 로드 가능
+        self.slice1 = nn.Sequential()
+        self.slice2 = nn.Sequential()
+        self.slice3 = nn.Sequential()
+        self.slice4 = nn.Sequential()
+
+        for x in range(12):
+            self.slice1.add_module(str(x), vgg[x])
+        for x in range(12, 19):
+            self.slice2.add_module(str(x), vgg[x])
+        for x in range(19, 29):
+            self.slice3.add_module(str(x), vgg[x])
+        for x in range(29, 39):
+            self.slice4.add_module(str(x), vgg[x])
+
         self.slice5 = nn.Sequential(
             nn.MaxPool2d(kernel_size=3, stride=1, padding=1),
             nn.Conv2d(512, 1024, kernel_size=3, padding=6, dilation=6),
