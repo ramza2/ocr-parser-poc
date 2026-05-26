@@ -64,21 +64,33 @@ class QwenVlmEngine(VlmEngine):
         from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
 
         hf_model = self.model_id
-        load_kwargs: dict = {"torch_dtype": torch.float16}
+        has_gpu = torch.cuda.is_available()
 
-        if torch.cuda.is_available():
-            load_kwargs["device_map"] = "auto"
+        if has_gpu:
+            cap = torch.cuda.get_device_capability()
+            has_tensor_cores = cap[0] >= 7  # Volta(7.0)+ 부터 Tensor Core 탑재
+            dtype = torch.float16 if has_tensor_cores else torch.float32
+            logger.info("GPU compute capability %s.%s → %s", cap[0], cap[1],
+                        "FP16" if has_tensor_cores else "FP32 (Tensor Core 미지원)")
         else:
-            load_kwargs["device_map"] = "cpu"
-            load_kwargs["torch_dtype"] = torch.float32
+            dtype = torch.float32
+
+        load_kwargs: dict = {
+            "torch_dtype": dtype,
+            "device_map": "auto" if has_gpu else "cpu",
+        }
 
         logger.info("Qwen2.5-VL 로드 시작: %s", hf_model)
-        self._processor = AutoProcessor.from_pretrained(hf_model)
+        self._processor = AutoProcessor.from_pretrained(
+            hf_model,
+            min_pixels=256 * 28 * 28,
+            max_pixels=512 * 28 * 28,
+        )
         self._model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             hf_model, **load_kwargs
         )
         self._model.eval()
-        logger.info("Qwen2.5-VL 로드 완료 (%s)", hf_model)
+        logger.info("Qwen2.5-VL 로드 완료 (%s, %s)", hf_model, dtype)
 
     def unload(self) -> None:
         self._model = None
@@ -86,16 +98,29 @@ class QwenVlmEngine(VlmEngine):
 
     # ── 내부 헬퍼 ─────────────────────────────────────
 
+    @staticmethod
+    def _resize_image(image_path: str, max_side: int = 1024):
+        """긴 변이 max_side를 초과하면 비율 유지하며 축소."""
+        from PIL import Image
+        img = Image.open(image_path).convert("RGB")
+        w, h = img.size
+        if max(w, h) <= max_side:
+            return img
+        scale = max_side / max(w, h)
+        return img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+
     def _chat(self, image_path: str, prompt: str) -> str:
         """이미지 + 프롬프트 → 텍스트 응답."""
         import torch
         from qwen_vl_utils import process_vision_info
 
+        resized = self._resize_image(image_path, max_side=1024)
+
         messages = [
             {
                 "role": "user",
                 "content": [
-                    {"type": "image", "image": f"file://{image_path}"},
+                    {"type": "image", "image": resized},
                     {"type": "text", "text": prompt},
                 ],
             }

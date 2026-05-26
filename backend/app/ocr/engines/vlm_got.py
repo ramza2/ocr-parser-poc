@@ -50,9 +50,15 @@ class GotOcrEngine(VlmEngine):
         from transformers import AutoModelForImageTextToText, AutoProcessor
 
         self._device = "cuda" if torch.cuda.is_available() else "cpu"
-        dtype = torch.float16 if self._device == "cuda" else torch.float32
 
-        logger.info("GOT-OCR2.0 로드 시작: %s", _HF_MODEL)
+        if self._device == "cuda":
+            cap = torch.cuda.get_device_capability()
+            has_tensor_cores = cap[0] >= 7
+            dtype = torch.float16 if has_tensor_cores else torch.float32
+        else:
+            dtype = torch.float32
+
+        logger.info("GOT-OCR2.0 로드 시작: %s (%s)", _HF_MODEL, dtype)
         self._processor = AutoProcessor.from_pretrained(_HF_MODEL)
         self._model = AutoModelForImageTextToText.from_pretrained(
             _HF_MODEL,
@@ -68,12 +74,21 @@ class GotOcrEngine(VlmEngine):
 
     # ── 내부 헬퍼 ─────────────────────────────────────
 
+    @staticmethod
+    def _load_and_resize(image_path: str, max_side: int = 1024):
+        from PIL import Image
+        img = Image.open(image_path).convert("RGB")
+        w, h = img.size
+        if max(w, h) <= max_side:
+            return img
+        scale = max_side / max(w, h)
+        return img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+
     def _run_ocr(self, image_path: str) -> str:
         """이미지 → OCR 텍스트 추출."""
         import torch
-        from PIL import Image
 
-        image = Image.open(image_path).convert("RGB")
+        image = self._load_and_resize(image_path, max_side=1024)
         inputs = self._processor(image, return_tensors="pt").to(self._device)
 
         with torch.no_grad():

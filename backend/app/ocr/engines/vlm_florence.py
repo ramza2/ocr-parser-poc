@@ -52,9 +52,15 @@ class FlorenceVlmEngine(VlmEngine):
         from transformers import AutoModelForCausalLM, AutoProcessor
 
         self._device = "cuda" if torch.cuda.is_available() else "cpu"
-        dtype = torch.float16 if self._device == "cuda" else torch.float32
 
-        logger.info("Florence-2 로드 시작: %s", _HF_MODEL)
+        if self._device == "cuda":
+            cap = torch.cuda.get_device_capability()
+            has_tensor_cores = cap[0] >= 7
+            dtype = torch.float16 if has_tensor_cores else torch.float32
+        else:
+            dtype = torch.float32
+
+        logger.info("Florence-2 로드 시작: %s (%s)", _HF_MODEL, dtype)
         self._processor = AutoProcessor.from_pretrained(
             _HF_MODEL, trust_remote_code=True
         )
@@ -72,12 +78,21 @@ class FlorenceVlmEngine(VlmEngine):
 
     # ── 내부 헬퍼 ─────────────────────────────────────
 
+    @staticmethod
+    def _load_and_resize(image_path: str, max_side: int = 1024):
+        from PIL import Image
+        img = Image.open(image_path).convert("RGB")
+        w, h = img.size
+        if max(w, h) <= max_side:
+            return img
+        scale = max_side / max(w, h)
+        return img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+
     def _run_task(self, image_path: str, task: str, text_input: str = "") -> dict:
         """Florence task 실행 → parsed result dict 반환."""
         import torch
-        from PIL import Image
 
-        image = Image.open(image_path).convert("RGB")
+        image = self._load_and_resize(image_path, max_side=1024)
         prompt = task if not text_input else task + text_input
 
         inputs = self._processor(
@@ -109,8 +124,7 @@ class FlorenceVlmEngine(VlmEngine):
             labels = ocr_data.get("labels", [])
             quads = ocr_data.get("quad_boxes", [])
 
-            from PIL import Image
-            img = Image.open(image_path)
+            img = self._load_and_resize(image_path, max_side=1024)
             w, h = img.size
 
             items: list[VlmOcrItem] = []
