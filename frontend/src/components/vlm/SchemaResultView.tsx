@@ -1,6 +1,5 @@
 import { useState } from "react";
 import type { SchemaExtractResponse } from "../../types/vlm";
-import ConfidenceBadge from "./ConfidenceBadge";
 import ImageWithBbox from "./ImageWithBbox";
 
 interface Props {
@@ -44,7 +43,6 @@ export default function SchemaResultView({ result, imageUrl }: Props) {
               <tr className="border-b border-slate-200 bg-slate-50">
                 <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Key</th>
                 <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Value</th>
-                <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-16">신뢰도</th>
               </tr>
             </thead>
             <tbody>
@@ -59,9 +57,6 @@ export default function SchemaResultView({ result, imageUrl }: Props) {
                   <td className="px-3 py-2 font-medium text-slate-700">{item.key}</td>
                   <td className="px-3 py-2 text-slate-800">
                     {item.value || <span className="text-slate-400 italic">-</span>}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <ConfidenceBadge value={item.confidence} />
                   </td>
                 </tr>
               ))}

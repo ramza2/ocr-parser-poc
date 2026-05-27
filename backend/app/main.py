@@ -9,6 +9,10 @@ OCR Parser PoC — FastAPI 진입점.
 
 PoC 특성상 예외도 HTTP 200 + ParseResponse.errors 로 반환하는 경우가 많음.
 """
+import logging
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse

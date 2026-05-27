@@ -28,12 +28,12 @@ try:
 except Exception as exc:
     logger.warning("GOT-OCR2.0 엔진 등록 실패: %s", exc)
 
-# Florence-2
-try:
-    from app.ocr.engines.vlm_florence import FlorenceVlmEngine
-    VLM_ENGINES["florence"] = FlorenceVlmEngine()
-except Exception as exc:
-    logger.warning("Florence-2 엔진 등록 실패: %s", exc)
+# Florence-2: transformers 버전 호환 문제로 비활성화
+# try:
+#     from app.ocr.engines.vlm_florence import FlorenceVlmEngine
+#     VLM_ENGINES["florence"] = FlorenceVlmEngine()
+# except Exception as exc:
+#     logger.warning("Florence-2 엔진 등록 실패: %s", exc)
 
 
 def get_vlm_engine(engine_id: str) -> VlmEngine | None:

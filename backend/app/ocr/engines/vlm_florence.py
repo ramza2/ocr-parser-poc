@@ -55,14 +55,38 @@ class FlorenceVlmEngine(VlmEngine):
         dtype = torch.float16 if self._device == "cuda" else torch.float32
 
         logger.info("Florence-2 로드 시작: %s (FP16=%s)", _HF_MODEL, self._device == "cuda")
-        self._processor = AutoProcessor.from_pretrained(
-            _HF_MODEL, trust_remote_code=True
-        )
-        self._model = AutoModelForCausalLM.from_pretrained(
-            _HF_MODEL,
-            trust_remote_code=True,
-            torch_dtype=dtype,
-        ).to(self._device)
+
+        # Florence-2는 transformers 버전별 호환 이슈가 있어 두 가지 방식 시도
+        loaded = False
+
+        # 1차: trust_remote_code=True (모델 레포의 커스텀 코드)
+        try:
+            self._processor = AutoProcessor.from_pretrained(
+                _HF_MODEL, trust_remote_code=True
+            )
+            self._model = AutoModelForCausalLM.from_pretrained(
+                _HF_MODEL, trust_remote_code=True, torch_dtype=dtype,
+            ).to(self._device)
+            loaded = True
+        except Exception as e1:
+            logger.warning("Florence-2 trust_remote_code 로드 실패: %s", e1)
+
+            # 2차: 네이티브 transformers 구현
+            try:
+                self._processor = AutoProcessor.from_pretrained(_HF_MODEL)
+                self._model = AutoModelForCausalLM.from_pretrained(
+                    _HF_MODEL, torch_dtype=dtype,
+                ).to(self._device)
+                loaded = True
+            except Exception as e2:
+                logger.warning("Florence-2 네이티브 로드 실패: %s", e2)
+
+        if not loaded:
+            raise RuntimeError(
+                "Florence-2 로드 실패: 현재 transformers 버전과 호환되지 않습니다. "
+                "Qwen2.5-VL 또는 GOT-OCR2.0을 사용해 주세요."
+            )
+
         self._model.eval()
         logger.info("Florence-2 로드 완료")
 

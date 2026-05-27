@@ -44,23 +44,26 @@ export default function ImageWithBbox({ imageUrl, items, highlightIndex }: Props
           viewBox={`0 0 ${imgSize.w} ${imgSize.h}`}
           preserveAspectRatio="xMidYMid meet"
         >
-          {items.map((item, i) => {
-            if (!item.bbox) return null;
-            const { x, y, width, height } = item.bbox;
-            const highlight = i === highlightIndex;
-            return (
-              <rect
-                key={i}
-                x={x * imgSize.w}
-                y={y * imgSize.h}
-                width={width * imgSize.w}
-                height={height * imgSize.h}
-                fill="none"
-                stroke={bboxColor(item.confidence, highlight)}
-                strokeWidth={highlight ? 3 : 2}
-              />
-            );
-          })}
+          {(() => {
+            const sw = Math.max(imgSize.w, imgSize.h) * 0.004;
+            return items.map((item, i) => {
+              if (!item.bbox) return null;
+              const { x, y, width, height } = item.bbox;
+              const highlight = i === highlightIndex;
+              return (
+                <rect
+                  key={i}
+                  x={x * imgSize.w}
+                  y={y * imgSize.h}
+                  width={width * imgSize.w}
+                  height={height * imgSize.h}
+                  fill={highlight ? "rgba(59, 130, 246, 0.1)" : "none"}
+                  stroke={bboxColor(item.confidence, highlight)}
+                  strokeWidth={highlight ? sw * 1.5 : sw}
+                />
+              );
+            });
+          })()}
         </svg>
       )}
     </div>

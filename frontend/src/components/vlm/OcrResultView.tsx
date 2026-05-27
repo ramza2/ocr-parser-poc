@@ -26,16 +26,14 @@ export default function OcrResultView({ result, imageUrl }: Props) {
         </span>
       </div>
 
-      <div className={hasBbox ? "grid grid-cols-2 gap-4" : ""}>
-        {hasBbox && (
-          <div>
-            <ImageWithBbox
-              imageUrl={imageUrl}
-              items={result.items}
-              highlightIndex={hoverIdx}
-            />
-          </div>
-        )}
+      <div className={hasBbox ? "grid grid-cols-2 gap-4" : "space-y-4"}>
+        <div>
+          <ImageWithBbox
+            imageUrl={imageUrl}
+            items={result.items}
+            highlightIndex={hoverIdx}
+          />
+        </div>
 
         <div className="space-y-3">
           <div className="max-h-[400px] overflow-y-auto rounded-lg border border-slate-200">

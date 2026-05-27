@@ -91,9 +91,16 @@ async def vlm_ocr(
             error=f"알 수 없는 모델: {model_id}",
         )
 
-    mgr.switch_model(model_id)
-    engine = registry[model_id]
+    try:
+        mgr.switch_model(model_id)
+    except Exception as exc:
+        logger.exception("모델 로드 실패: %s", model_id)
+        return VlmOcrResponse(
+            success=False, model_id=model_id,
+            error=f"모델 로드 실패: {exc}",
+        )
 
+    engine = registry[model_id]
     content = await file.read()
     tmp = save_upload_to_temp(content, file.filename or "upload.png")
     try:
@@ -128,9 +135,16 @@ async def vlm_extract(
             error=f"Schema 파싱 오류: {exc}",
         )
 
-    mgr.switch_model(model_id)
-    engine = registry[model_id]
+    try:
+        mgr.switch_model(model_id)
+    except Exception as exc:
+        logger.exception("모델 로드 실패: %s", model_id)
+        return SchemaExtractResponse(
+            success=False, model_id=model_id,
+            error=f"모델 로드 실패: {exc}",
+        )
 
+    engine = registry[model_id]
     content = await file.read()
     tmp = save_upload_to_temp(content, file.filename or "upload.png")
     try:
@@ -156,9 +170,16 @@ async def vlm_ask(
             error=f"알 수 없는 모델: {model_id}",
         )
 
-    mgr.switch_model(model_id)
-    engine = registry[model_id]
+    try:
+        mgr.switch_model(model_id)
+    except Exception as exc:
+        logger.exception("모델 로드 실패: %s", model_id)
+        return QaResponse(
+            success=False, model_id=model_id,
+            error=f"모델 로드 실패: {exc}",
+        )
 
+    engine = registry[model_id]
     content = await file.read()
     tmp = save_upload_to_temp(content, file.filename or "upload.png")
     try:
