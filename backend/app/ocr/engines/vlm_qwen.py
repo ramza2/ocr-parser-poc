@@ -11,8 +11,6 @@ import json
 import logging
 import time
 
-import re
-
 from app.ocr.engines.vlm_base import VlmEngine
 from app.schemas.vlm import (
     BoundingBox,
@@ -217,6 +215,34 @@ class QwenVlmEngine(VlmEngine):
                 error=str(exc),
             )
 
+    @staticmethod
+    def _build_schema_prompt(schema: list[SchemaField]) -> str:
+        """Schema 필드 설명 + 공통 추출 규칙."""
+        lines: list[str] = []
+        for i, f in enumerate(schema, start=1):
+            desc = (f.description or f.key).strip()
+            lines.append(
+                f'{i}. key="{f.key}" — {desc} (타입: {f.type})'
+            )
+
+        rules = [
+            "각 key마다 정확히 하나의 JSON 객체를 출력하세요 (key 개수와 배열 길이가 같아야 함).",
+            "value는 이미지에 실제로 보이는 텍스트를 그대로 사용하세요.",
+            "bbox는 해당 value 텍스트가 있는 한 줄(또는 블록) 전체를 감싸는 픽셀 좌표 "
+            "(좌상단 x,y → 우하단 x,y)입니다.",
+            "값을 찾을 수 없으면 value는 빈 문자열, bbox는 null입니다.",
+        ]
+
+        return (
+            "이 이미지에서 아래 Schema 항목 각각에 대해 value와 bbox를 추출하세요.\n\n"
+            "[추출 항목]\n"
+            + "\n".join(lines)
+            + "\n\n[규칙]\n"
+            + "\n".join(f"- {r}" for r in rules)
+            + "\n\n반드시 JSON 배열만 응답하세요. 형식:\n"
+            '[{"key": "스키마키", "value": "추출값", "bbox": [x1, y1, x2, y2]}]\n'
+        )
+
     def extract_schema(
         self,
         image_path: str,
@@ -225,20 +251,9 @@ class QwenVlmEngine(VlmEngine):
     ) -> SchemaExtractResponse:
         t0 = time.time()
         try:
-            fields_desc = "\n".join(
-                f'- "{f.key}": {f.description or f.key} (타입: {f.type})'
-                for f in schema
-            )
-            prompt = (
-                "이 이미지에서 아래 항목들의 값과 위치를 추출하세요.\n\n"
-                f"{fields_desc}\n\n"
-                "반드시 JSON 배열로만 응답하세요. 각 원소는 다음 형태입니다:\n"
-                '{"key": "...", "value": "...", "bbox": [x1, y1, x2, y2]}\n'
-                "bbox는 모델이 보는 이미지 기준 픽셀 좌표입니다 "
-                "(좌상단 x, 좌상단 y, 우하단 x, 우하단 y).\n"
-                "값을 찾을 수 없으면 value를 빈 문자열로, bbox를 null로 하세요."
-            )
+            prompt = self._build_schema_prompt(schema)
             raw, processed_size = self._chat(image_path, prompt)
+            logger.info("Qwen Schema 원본 응답:\n%s", raw[:2000])
             elapsed = int((time.time() - t0) * 1000)
             items = self._parse_schema_with_bbox(raw, schema, processed_size)
             return SchemaExtractResponse(
