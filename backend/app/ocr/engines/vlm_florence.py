@@ -52,15 +52,9 @@ class FlorenceVlmEngine(VlmEngine):
         from transformers import AutoModelForCausalLM, AutoProcessor
 
         self._device = "cuda" if torch.cuda.is_available() else "cpu"
+        dtype = torch.float16 if self._device == "cuda" else torch.float32
 
-        if self._device == "cuda":
-            cap = torch.cuda.get_device_capability()
-            has_tensor_cores = cap[0] >= 7
-            dtype = torch.float16 if has_tensor_cores else torch.float32
-        else:
-            dtype = torch.float32
-
-        logger.info("Florence-2 로드 시작: %s (%s)", _HF_MODEL, dtype)
+        logger.info("Florence-2 로드 시작: %s (FP16=%s)", _HF_MODEL, self._device == "cuda")
         self._processor = AutoProcessor.from_pretrained(
             _HF_MODEL, trust_remote_code=True
         )

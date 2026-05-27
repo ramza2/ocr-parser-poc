@@ -66,17 +66,8 @@ class QwenVlmEngine(VlmEngine):
         hf_model = self.model_id
         has_gpu = torch.cuda.is_available()
 
-        if has_gpu:
-            cap = torch.cuda.get_device_capability()
-            has_tensor_cores = cap[0] >= 7  # Volta(7.0)+ 부터 Tensor Core 탑재
-            dtype = torch.float16 if has_tensor_cores else torch.float32
-            logger.info("GPU compute capability %s.%s → %s", cap[0], cap[1],
-                        "FP16" if has_tensor_cores else "FP32 (Tensor Core 미지원)")
-        else:
-            dtype = torch.float32
-
         load_kwargs: dict = {
-            "torch_dtype": dtype,
+            "torch_dtype": torch.float16 if has_gpu else torch.float32,
             "device_map": "auto" if has_gpu else "cpu",
         }
 
@@ -90,7 +81,7 @@ class QwenVlmEngine(VlmEngine):
             hf_model, **load_kwargs
         )
         self._model.eval()
-        logger.info("Qwen2.5-VL 로드 완료 (%s, %s)", hf_model, dtype)
+        logger.info("Qwen2.5-VL 로드 완료 (%s)", hf_model)
 
     def unload(self) -> None:
         self._model = None
