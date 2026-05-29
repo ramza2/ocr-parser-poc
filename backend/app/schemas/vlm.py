@@ -34,8 +34,8 @@ class VlmOcrResponse(BaseModel):
     items: list[VlmOcrItem] = Field(default_factory=list)
     full_text: str = ""
     error: str | None = None
-    prompt_mode: str | None = None  # auto | bbox | plain | custom
-    prompt_label: str | None = None  # 실제 사용된 단계 (bbox_ko, plain, custom 등)
+    prompt_mode: str | None = None  # auto | bbox | custom
+    prompt_label: str | None = None  # 실제 사용 단계 (spotting, custom 등)
     raw_response_preview: str | None = None  # 모델 원본 응답 앞부분 (디버그)
 
 

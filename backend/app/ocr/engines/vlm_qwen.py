@@ -136,78 +136,48 @@ class QwenVlmEngine(VlmEngine):
         ).to(self._model.device)
 
         with torch.no_grad():
-            ids = self._model.generate(**inputs, max_new_tokens=2048)
+            ids = self._model.generate(
+                **inputs,
+                max_new_tokens=4096,
+                do_sample=False,
+            )
         trimmed = ids[:, inputs.input_ids.shape[1]:]
         text = self._processor.batch_decode(
             trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
         )[0]
         return text, processed_size
 
-    @staticmethod
-    def _bbox_ocr_prompts() -> list[str]:
-        """Qwen2.5-VL: processor 리사이즈 이미지 기준 절대 픽셀 bbox."""
-        return [
-            (
-                "이 이미지의 모든 텍스트를 줄/블록 단위로 읽고 위치를 표시하세요.\n"
-                "반드시 JSON 배열만 출력하세요. 형식:\n"
-                '[{"text": "텍스트", "bbox": [x1, y1, x2, y2]}]\n'
-                "bbox는 모델이 보는 이미지 기준 픽셀 좌표입니다 "
-                "(좌상단 x,y → 우하단 x,y).\n"
-                "화면에 보이는 텍스트가 있으면 빈 배열 []을 반환하지 마세요."
-            ),
-            (
-                "Read every visible text line in this image with its bounding box.\n"
-                "Output ONLY a JSON array like:\n"
-                '[{"text": "line text", "bbox": [x1, y1, x2, y2]}]\n'
-                "Use pixel coordinates on the input image (top-left to bottom-right).\n"
-                "Example: [{\"text\": \"Hello\", \"bbox\": [12, 40, 180, 72]}]\n"
-                "Never return [] if any text is visible."
-            ),
-        ]
-
-    _PLAIN_OCR_PROMPT = (
-        "이 이미지에 있는 모든 텍스트를 빠짐없이 읽어주세요. "
-        "원본 레이아웃(줄바꿈, 들여쓰기)을 최대한 유지하세요."
+    # Qwen2.5-VL 공식 text spotting 형식 (bbox_2d + text_content)
+    _SPOTTING_OCR_PROMPT = (
+        "Spot all visible text in this image at line level.\n\n"
+        "Return ONLY a valid JSON array in reading order from top to bottom "
+        "and left to right.\n\n"
+        "Use exactly this schema for every detected text line:\n"
+        '[{"bbox_2d": [x1, y1, x2, y2], "text_content": "recognized text"}]\n\n'
+        "Requirements:\n\n"
+        "* Detect every visible text line, including Korean, English, numbers, "
+        "punctuation, table cell text, headers, labels, and rotated text.\n"
+        "* Preserve the recognized text exactly as it appears in the image.\n"
+        "* Use one JSON object per visual text line. Do not merge separate lines.\n"
+        "* Each bbox_2d must tightly enclose only its corresponding text line.\n"
+        "* Do not output markdown, code fences, explanations, comments, "
+        "confidence scores, or any additional keys.\n"
+        "* Return [] only when there is truly no visible text in the image."
     )
 
-    def _run_bbox_passes(
-        self, image_path: str, *, allow_plain_fallback: bool
+    def _run_single_vlm(
+        self, image_path: str, prompt: str, label: str
     ) -> tuple[list[VlmOcrItem], str, str]:
-        """bbox 프롬프트(한/영) 시도. (items, label, raw)."""
-        labels = ("bbox_ko", "bbox_en")
-        last_raw = ""
-        processed_size: tuple[int, int] | None = None
-
-        for label, prompt in zip(labels, self._bbox_ocr_prompts()):
-            raw, processed_size = self._chat(image_path, prompt)
-            last_raw = raw
-            items = self._parse_ocr_with_bbox(raw, processed_size)
-            has_bbox = any(it.bbox for it in items)
-            logger.info(
-                "%s: 항목 %d개, bbox %d개", label, len(items), sum(1 for it in items if it.bbox)
-            )
-            if items and has_bbox:
-                return items, label, raw
-
-        if allow_plain_fallback:
-            logger.info("bbox OCR 실패, 일반 OCR 재시도 (auto)")
-            raw_plain, _ = self._chat(image_path, self._PLAIN_OCR_PROMPT)
-            return self._parse_plain_ocr(raw_plain), "plain_fallback", raw_plain
-
-        return [], "bbox_failed", last_raw
-
-    def _run_plain_pass(self, image_path: str) -> tuple[list[VlmOcrItem], str, str]:
-        raw, _ = self._chat(image_path, self._PLAIN_OCR_PROMPT)
-        return self._parse_plain_ocr(raw), "plain", raw
-
-    def _run_custom_pass(
-        self, image_path: str, custom_prompt: str
-    ) -> tuple[list[VlmOcrItem], str, str]:
-        raw, processed_size = self._chat(image_path, custom_prompt)
+        """VLM 1회 호출 → JSON 파싱 (재시도 없음)."""
+        raw, processed_size = self._chat(image_path, prompt)
         items = self._parse_ocr_with_bbox(raw, processed_size)
-        if items:
-            return items, "custom_json", raw
-        return self._parse_plain_ocr(raw), "custom_plain", raw
+        logger.info(
+            "%s: 항목 %d개, bbox %d개",
+            label,
+            len(items),
+            sum(1 for it in items if it.bbox),
+        )
+        return items, label, raw
 
     # ── VLM 메서드 ────────────────────────────────────
 
@@ -221,16 +191,13 @@ class QwenVlmEngine(VlmEngine):
             if prompt_mode == "custom":
                 if not custom_prompt:
                     raise ValueError("커스텀 프롬프트가 비어 있습니다.")
-                items, label, raw = self._run_custom_pass(image_path, custom_prompt)
-            elif prompt_mode == "plain":
-                items, label, raw = self._run_plain_pass(image_path)
-            elif prompt_mode == "bbox":
-                items, label, raw = self._run_bbox_passes(
-                    image_path, allow_plain_fallback=False
+                items, label, raw = self._run_single_vlm(
+                    image_path, custom_prompt, "custom"
                 )
-            else:  # auto
-                items, label, raw = self._run_bbox_passes(
-                    image_path, allow_plain_fallback=True
+            else:
+                # auto / bbox / plain(구버전): Qwen spotting 1회
+                items, label, raw = self._run_single_vlm(
+                    image_path, self._SPOTTING_OCR_PROMPT, "spotting"
                 )
 
             elapsed = int((time.time() - t0) * 1000)
@@ -379,19 +346,19 @@ class QwenVlmEngine(VlmEngine):
             return []
 
     @staticmethod
-    def _parse_plain_ocr(raw: str) -> list[VlmOcrItem]:
-        """일반 텍스트 OCR 응답 → VlmOcrItem 리스트."""
-        lines = [ln.strip() for ln in raw.split("\n") if ln.strip()]
-        if lines:
-            return [VlmOcrItem(text=ln) for ln in lines]
-        text = raw.strip()
-        return [VlmOcrItem(text=text)] if text else []
+    def _entry_bbox(entry: dict) -> list | None:
+        """JSON 항목에서 bbox 좌표 추출 (bbox_2d / bbox 키 지원)."""
+        raw = entry.get("bbox_2d") or entry.get("bbox")
+        return raw if isinstance(raw, (list, tuple)) else None
 
     @staticmethod
-    def _entry_bbox(entry: dict) -> list | None:
-        """JSON 항목에서 bbox 좌표 추출 (bbox / bbox_2d 키 지원)."""
-        raw = entry.get("bbox") or entry.get("bbox_2d")
-        return raw if isinstance(raw, (list, tuple)) else None
+    def _entry_text(entry: dict) -> str:
+        """JSON 항목에서 텍스트 추출 (text_content / text 키 지원)."""
+        for key in ("text_content", "text", "content"):
+            val = entry.get(key)
+            if val is not None and str(val).strip():
+                return str(val).strip()
+        return ""
 
     def _parse_ocr_with_bbox(
         self, raw: str, img_size: tuple[int, int] | None = None
@@ -408,7 +375,7 @@ class QwenVlmEngine(VlmEngine):
         for entry in data:
             if not isinstance(entry, dict):
                 continue
-            text = str(entry.get("text", "")).strip()
+            text = self._entry_text(entry)
             if not text:
                 continue
             bbox = self._to_bbox(self._entry_bbox(entry), img_size)
