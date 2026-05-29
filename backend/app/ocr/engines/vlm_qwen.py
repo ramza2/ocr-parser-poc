@@ -148,22 +148,35 @@ class QwenVlmEngine(VlmEngine):
         )[0]
         return text, processed_size
 
-    # Qwen2.5-VL 공식 text spotting 형식 (bbox_2d + text_content)
+    # Scene-text OCR + grounding (bbox_2d + text_content)
     _SPOTTING_OCR_PROMPT = (
-        "Spot all visible text in this image at line level.\n\n"
-        "Return ONLY a valid JSON array in reading order from top to bottom "
+        "You are a scene-text OCR and text-grounding engine.\n\n"
+        "Find and transcribe ALL visible text in this image, whether it appears in:\n\n"
+        "* a document or mobile screen,\n"
+        "* a signboard, road sign, direction board, label, poster, or product,\n"
+        "* an outdoor or natural scene.\n\n"
+        "Pay special attention to:\n\n"
+        "* Korean, English, Chinese characters, numbers, and punctuation,\n"
+        "* stylized, embossed, shadowed, engraved, painted, low-contrast, or "
+        "angled text,\n"
+        "* text on colored boards or textured backgrounds.\n\n"
+        "Before returning an empty result, carefully inspect the entire image "
+        "for any object or region containing readable characters.\n\n"
+        "Return ONLY a valid JSON array in reading order, from top to bottom "
         "and left to right.\n\n"
-        "Use exactly this schema for every detected text line:\n"
+        "Use exactly this schema:\n"
         '[{"bbox_2d": [x1, y1, x2, y2], "text_content": "recognized text"}]\n\n'
-        "Requirements:\n\n"
-        "* Detect every visible text line, including Korean, English, numbers, "
-        "punctuation, table cell text, headers, labels, and rotated text.\n"
-        "* Preserve the recognized text exactly as it appears in the image.\n"
-        "* Use one JSON object per visual text line. Do not merge separate lines.\n"
-        "* Each bbox_2d must tightly enclose only its corresponding text line.\n"
-        "* Do not output markdown, code fences, explanations, comments, "
-        "confidence scores, or any additional keys.\n"
-        "* Return [] only when there is truly no visible text in the image."
+        "Rules:\n\n"
+        "* Return one object per visible text line.\n"
+        "* Preserve text exactly as it appears in the image.\n"
+        "* Each bbox_2d must tightly enclose its corresponding text line.\n"
+        "* Do not omit text because it is decorative, on a signboard, photographed "
+        "outdoors, shadowed, embossed, or low contrast.\n"
+        "* Do not output markdown, explanations, comments, confidence scores, or "
+        "additional keys.\n"
+        "* The JSON must be strict RFC 8259: no trailing commas.\n"
+        "* Return [] only when there are truly no visible characters or words "
+        "anywhere in the image."
     )
 
     def _run_single_vlm(
@@ -235,29 +248,45 @@ class QwenVlmEngine(VlmEngine):
 
     @staticmethod
     def _build_schema_prompt(schema: list[SchemaField]) -> str:
-        """Schema 필드 설명 + Qwen bbox_2d 출력 규약."""
+        """Schema 필드 추출 — scene-text grounding + key/value 언어 규칙."""
         lines: list[str] = []
         for i, f in enumerate(schema, start=1):
             desc = (f.description or f.key).strip()
-            lines.append(f'{i}. key="{f.key}" — {desc} (type: {f.type})')
+            lines.append(
+                f'{i}. key="{f.key}" (copy this key exactly in output) — '
+                f"locate: {desc} (type: {f.type})"
+            )
 
         rules = [
-            "Return exactly one JSON object per schema key (array length must match).",
-            "Use the exact visible text from the image for value.",
+            "Return exactly one JSON object per schema key; array length must equal "
+            f"the number of fields ({len(schema)}).",
+            'The "key" in each object must exactly match the schema key string '
+            "(including Chinese or other scripts — never rename or translate keys).",
+            'The "value" must be transcribed verbatim from the image for that field. '
+            "Never translate, summarize, or rewrite into another language.",
+            "The language of the field description does NOT control the output "
+            "language — only visible image text does.",
+            "If the image shows Chinese, use Chinese; if Korean, use Korean; if "
+            "English, use English. Mixed scripts are allowed.",
+            "Search the whole image: documents, screens, signboards, labels, posters, "
+            "embossed, shadowed, low-contrast, or angled text.",
             "bbox_2d must tightly enclose the text region for that value.",
-            "If a value is not found, use an empty string for value and null for bbox_2d.",
-            "Do not output markdown, code fences, explanations, or extra keys.",
+            "If not found after careful inspection, use value=\"\" and bbox_2d=null.",
+            "Do not output markdown, explanations, comments, or extra keys.",
+            "The JSON must be strict RFC 8259: no trailing commas.",
         ]
 
         return (
-            "Extract each schema field from this image with its location.\n\n"
+            "You are a scene-text OCR and structured field extraction engine.\n\n"
+            "Extract each schema field below from ALL visible text in this image "
+            "(documents, screens, signboards, labels, outdoor scenes).\n\n"
             "Return ONLY a valid JSON array.\n\n"
             "[Fields]\n"
             + "\n".join(lines)
             + "\n\n[Rules]\n"
             + "\n".join(f"* {r}" for r in rules)
             + "\n\nUse exactly this schema for every field:\n"
-            '[{"key": "schema_key", "value": "extracted text", '
+            '[{"key": "schema_key", "value": "verbatim text from image", '
             '"bbox_2d": [x1, y1, x2, y2]}]\n'
         )
 

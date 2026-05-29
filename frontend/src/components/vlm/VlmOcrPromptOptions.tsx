@@ -3,8 +3,8 @@ import type { VlmOcrPromptMode } from "../../types/vlm";
 const MODES: { id: VlmOcrPromptMode; label: string; desc: string }[] = [
   {
     id: "spotting",
-    label: "Spotting",
-    desc: "Qwen bbox_2d + text_content (1회)",
+    label: "전체 OCR",
+    desc: "간판·문서·scene-text + bbox (1회)",
   },
   {
     id: "custom",
@@ -13,21 +13,36 @@ const MODES: { id: VlmOcrPromptMode; label: string; desc: string }[] = [
   },
 ];
 
-export const DEFAULT_SPOTTING_PROMPT = `Spot all visible text in this image at line level.
+export const DEFAULT_SPOTTING_PROMPT = `You are a scene-text OCR and text-grounding engine.
 
-Return ONLY a valid JSON array in reading order from top to bottom and left to right.
+Find and transcribe ALL visible text in this image, whether it appears in:
 
-Use exactly this schema for every detected text line:
+* a document or mobile screen,
+* a signboard, road sign, direction board, label, poster, or product,
+* an outdoor or natural scene.
+
+Pay special attention to:
+
+* Korean, English, Chinese characters, numbers, and punctuation,
+* stylized, embossed, shadowed, engraved, painted, low-contrast, or angled text,
+* text on colored boards or textured backgrounds.
+
+Before returning an empty result, carefully inspect the entire image for any object or region containing readable characters.
+
+Return ONLY a valid JSON array in reading order, from top to bottom and left to right.
+
+Use exactly this schema:
 [{"bbox_2d": [x1, y1, x2, y2], "text_content": "recognized text"}]
 
-Requirements:
+Rules:
 
-* Detect every visible text line, including Korean, English, numbers, punctuation, table cell text, headers, labels, and rotated text.
-* Preserve the recognized text exactly as it appears in the image.
-* Use one JSON object per visual text line. Do not merge separate lines.
-* Each bbox_2d must tightly enclose only its corresponding text line.
-* Do not output markdown, code fences, explanations, comments, confidence scores, or any additional keys.
-* Return [] only when there is truly no visible text in the image.`;
+* Return one object per visible text line.
+* Preserve text exactly as it appears in the image.
+* Each bbox_2d must tightly enclose its corresponding text line.
+* Do not omit text because it is decorative, on a signboard, photographed outdoors, shadowed, embossed, or low contrast.
+* Do not output markdown, explanations, comments, confidence scores, or additional keys.
+* The JSON must be strict RFC 8259: no trailing commas.
+* Return [] only when there are truly no visible characters or words anywhere in the image.`;
 
 interface Props {
   promptMode: VlmOcrPromptMode;
@@ -82,7 +97,7 @@ export default function VlmOcrPromptOptions({
             onClick={fillSpottingPreset}
             className="rounded border border-slate-200 px-2 py-0.5 text-[10px] text-slate-600 hover:bg-slate-50 disabled:opacity-50"
           >
-            Spotting 프롬프트 예시
+            전체 OCR 프롬프트 예시
           </button>
           <textarea
             value={customPrompt}
