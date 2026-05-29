@@ -45,6 +45,10 @@ class SchemaField(BaseModel):
     key: str
     description: str = ""
     type: str = "text"
+    # exact_text | script_filter | semantic_field
+    match_mode: str = "exact_text"
+    # script_filter 전용: han | hangul | latin | english | digit
+    script: str = "han"
 
 
 class SchemaExtractItem(BaseModel):

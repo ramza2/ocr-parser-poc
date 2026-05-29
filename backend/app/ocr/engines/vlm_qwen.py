@@ -246,49 +246,107 @@ class QwenVlmEngine(VlmEngine):
                 error=str(exc),
             )
 
-    @staticmethod
-    def _build_schema_prompt(schema: list[SchemaField]) -> str:
-        """Schema 필드 추출 — scene-text grounding + key/value 언어 규칙."""
-        lines: list[str] = []
-        for i, f in enumerate(schema, start=1):
-            desc = (f.description or f.key).strip()
-            lines.append(
-                f'{i}. key="{f.key}" (copy this key exactly in output) — '
-                f"locate: {desc} (type: {f.type})"
+    _SCHEMA_MATCH_MODES = frozenset(
+        {"exact_text", "script_filter", "semantic_field"}
+    )
+    _SCRIPT_LABELS: dict[str, str] = {
+        "han": "Han (CJK ideographs)",
+        "hangul": "Hangul (Korean syllables)",
+        "latin": "Latin letters",
+        "english": "English letters",
+        "digit": "digits and numbers",
+    }
+
+    @classmethod
+    def _normalize_match_mode(cls, mode: str | None) -> str:
+        m = (mode or "exact_text").strip().lower()
+        return m if m in cls._SCHEMA_MATCH_MODES else "exact_text"
+
+    @classmethod
+    def _script_label(cls, script: str | None) -> str:
+        s = (script or "han").strip().lower()
+        return cls._SCRIPT_LABELS.get(s, cls._SCRIPT_LABELS["han"])
+
+    @classmethod
+    def _format_schema_target(cls, field: SchemaField) -> str:
+        key = field.key.strip()
+        hint = (field.description or "").strip()
+        mode = cls._normalize_match_mode(field.match_mode)
+        hint_part = f'; location_hint="{hint}"' if hint else ""
+
+        if mode == "exact_text":
+            return (
+                f'key="{key}" — match_mode=exact_text; '
+                f'target_text="{key}" (find this literal string only){hint_part}'
             )
-
-        rules = [
-            "Return exactly one JSON object per schema key; array length must equal "
-            f"the number of fields ({len(schema)}).",
-            'The "key" in each object must exactly match the schema key string '
-            "(including Chinese or other scripts — never rename or translate keys).",
-            'The "value" must be transcribed verbatim from the image for that field. '
-            "Never translate, summarize, or rewrite into another language.",
-            "The language of the field description does NOT control the output "
-            "language — only visible image text does.",
-            "If the image shows Chinese, use Chinese; if Korean, use Korean; if "
-            "English, use English. Mixed scripts are allowed.",
-            "Search the whole image: documents, screens, signboards, labels, posters, "
-            "embossed, shadowed, low-contrast, or angled text.",
-            "bbox_2d must tightly enclose the text region for that value.",
-            "If not found after careful inspection, use value=\"\" and bbox_2d=null.",
-            "Do not output markdown, explanations, comments, or extra keys.",
-            "The JSON must be strict RFC 8259: no trailing commas.",
-        ]
-
+        if mode == "script_filter":
+            script = cls._script_label(field.script)
+            return (
+                f'key="{key}" — match_mode=script_filter; '
+                f"extract only visible {script} from the image{hint_part}"
+            )
+        locate = hint or key
         return (
-            "You are a scene-text OCR and structured field extraction engine.\n\n"
-            "Extract each schema field below from ALL visible text in this image "
-            "(documents, screens, signboards, labels, outdoor scenes).\n\n"
-            "Return ONLY a valid JSON array.\n\n"
-            "[Fields]\n"
-            + "\n".join(lines)
-            + "\n\n[Rules]\n"
-            + "\n".join(f"* {r}" for r in rules)
-            + "\n\nUse exactly this schema for every field:\n"
-            '[{"key": "schema_key", "value": "verbatim text from image", '
+            f'key="{key}" — match_mode=semantic_field; '
+            f'locate="{locate}" (semantic field; transcribe visible text){hint_part}'
+        )
+
+    @classmethod
+    def _build_schema_prompt(cls, schema: list[SchemaField]) -> str:
+        """Schema 추출 — match_mode별 규칙 (exact / script / semantic)."""
+        targets = "\n".join(cls._format_schema_target(f) for f in schema)
+        n = len(schema)
+        return (
+            "You are a scene-text localization and extraction engine.\n\n"
+            "Each target below has a match_mode. Follow only the rules for that "
+            "target's mode.\n\n"
+            "[Targets]\n"
+            f"{targets}\n\n"
+            "[Global rules]\n\n"
+            f"Return exactly one JSON object per target. "
+            f"Array length must equal {n}.\n"
+            'The output "key" must exactly copy the requested key string.\n'
+            "Search documents, screens, signboards, labels, posters, outdoor scenes, "
+            "embossed, shadowed, low-contrast, or angled text.\n"
+            'bbox_2d must tightly enclose the text returned in "value".\n'
+            "Do not output markdown, code fences, explanations, comments, "
+            "confidence scores, or additional keys.\n"
+            "Output strict RFC 8259 JSON only, with no trailing commas.\n\n"
+            "[exact_text rules]\n\n"
+            "target_text is the literal visible string to find, not a concept.\n"
+            '"value" must contain only that exact visible string.\n'
+            "Never concatenate neighboring lines or other languages, even on the "
+            "same signboard or with the same meaning.\n"
+            "Never include translations or equivalent wording.\n"
+            "location_hint must never appear in value.\n"
+            'If target_text is not found, use value="" and bbox_2d=null.\n\n'
+            "[script_filter rules]\n\n"
+            '"value" must contain only characters of the requested script, '
+            "transcribed exactly as visible.\n"
+            "Do not include characters from other scripts in the same value.\n"
+            "If multiple regions match, prefer the region indicated by location_hint; "
+            "otherwise use the most prominent matching region.\n"
+            'If none found, use value="" and bbox_2d=null.\n\n'
+            "[semantic_field rules]\n\n"
+            "Find the visible text that matches the locate description.\n"
+            '"value" must be verbatim visible text from the image (no translation).\n'
+            "location_hint helps position only; do not copy it into value.\n"
+            'If not found, use value="" and bbox_2d=null.\n\n'
+            "Use exactly this output schema:\n"
+            '[{"key": "requested_key", "value": "extracted visible text", '
             '"bbox_2d": [x1, y1, x2, y2]}]\n'
         )
+
+    @staticmethod
+    def _normalize_match_text(text: str) -> str:
+        return " ".join(text.split())
+
+    @classmethod
+    def is_valid_exact_match(cls, key: str, value: str) -> bool:
+        """exact-match: value가 비어 있지 않으면 key와 동일 문자열만 허용."""
+        if not value.strip():
+            return True
+        return cls._normalize_match_text(key) == cls._normalize_match_text(value)
 
     def extract_schema(
         self,
@@ -503,7 +561,21 @@ class QwenVlmEngine(VlmEngine):
             entry = result_map.get(f.key, {})
             value = self._entry_schema_value(entry) if entry else ""
             bbox = (
-                self._to_bbox(self._entry_bbox(entry), img_size) if entry else None
+                self._to_bbox(self._entry_bbox(entry), img_size)
+                if entry and value
+                else None
             )
+            if (
+                self._normalize_match_mode(f.match_mode) == "exact_text"
+                and value
+                and not self.is_valid_exact_match(f.key, value)
+            ):
+                logger.warning(
+                    "Schema exact_text 거부 key=%r value=%r (병합/번역 의심)",
+                    f.key,
+                    value,
+                )
+                value = ""
+                bbox = None
             items.append(SchemaExtractItem(key=f.key, value=value, bbox=bbox))
         return items

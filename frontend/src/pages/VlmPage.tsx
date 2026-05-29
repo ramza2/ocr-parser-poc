@@ -53,7 +53,13 @@ export default function VlmPage() {
 
   // Schema mode
   const [schema, setSchema] = useState<SchemaField[]>([
-    { key: "", description: "", type: "text" },
+    {
+      key: "",
+      description: "",
+      type: "text",
+      match_mode: "exact_text",
+      script: "han",
+    },
   ]);
 
   // Results
