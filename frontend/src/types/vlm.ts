@@ -13,6 +13,13 @@ export interface VlmOcrItem {
   bbox?: BoundingBox | null;
 }
 
+export type VlmOcrPromptMode = "auto" | "bbox" | "plain" | "custom";
+
+export interface VlmOcrOptions {
+  promptMode?: VlmOcrPromptMode;
+  customPrompt?: string;
+}
+
 export interface VlmOcrResponse {
   success: boolean;
   model_id: string;
@@ -20,6 +27,9 @@ export interface VlmOcrResponse {
   items: VlmOcrItem[];
   full_text: string;
   error?: string | null;
+  prompt_mode?: string | null;
+  prompt_label?: string | null;
+  raw_response_preview?: string | null;
 }
 
 export interface SchemaField {

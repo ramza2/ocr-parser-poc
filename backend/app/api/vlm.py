@@ -85,6 +85,8 @@ async def load_model(model_id: str = Form(...)):
 async def vlm_ocr(
     file: UploadFile = File(...),
     model_id: str = Form(...),
+    ocr_prompt_mode: str = Form("auto"),
+    custom_prompt: str = Form(""),
 ) -> VlmOcrResponse:
     registry = _get_registry()
     mgr = _get_manager()
@@ -107,13 +109,18 @@ async def vlm_ocr(
     engine = registry[model_id]
     content = await file.read()
     tmp = save_upload_to_temp(content, file.filename or "upload.png")
+    ocr_options = {
+        "prompt_mode": ocr_prompt_mode.strip().lower() or "auto",
+        "custom_prompt": custom_prompt.strip(),
+    }
     try:
-        return engine.ocr(tmp)
+        return engine.ocr(tmp, ocr_options)
     except Exception as exc:
         logger.exception("VLM OCR 실패")
         return VlmOcrResponse(
             success=False, model_id=model_id,
             error=f"VLM OCR 실패: {exc}",
+            prompt_mode=ocr_options["prompt_mode"],
         )
     finally:
         remove_file(tmp)

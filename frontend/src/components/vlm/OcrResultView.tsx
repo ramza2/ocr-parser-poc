@@ -24,7 +24,24 @@ export default function OcrResultView({ result, imageUrl }: Props) {
         <span className="text-xs text-slate-500">
           {result.items.length}개 항목
         </span>
+        {result.prompt_mode && (
+          <span className="rounded bg-amber-50 px-2 py-0.5 text-xs text-amber-800">
+            {result.prompt_mode}
+            {result.prompt_label ? ` · ${result.prompt_label}` : ""}
+          </span>
+        )}
       </div>
+
+      {result.raw_response_preview && (
+        <details className="rounded-lg border border-slate-200 bg-slate-50 text-xs">
+          <summary className="cursor-pointer px-3 py-2 font-medium text-slate-600">
+            모델 원본 응답 (미리보기)
+          </summary>
+          <pre className="max-h-40 overflow-auto whitespace-pre-wrap border-t border-slate-200 p-3 text-slate-700">
+            {result.raw_response_preview}
+          </pre>
+        </details>
+      )}
 
       <div className={hasBbox ? "grid grid-cols-2 gap-4" : "space-y-4"}>
         <div>

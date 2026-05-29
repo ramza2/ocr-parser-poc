@@ -165,45 +165,91 @@ class QwenVlmEngine(VlmEngine):
             ),
         ]
 
+    _PLAIN_OCR_PROMPT = (
+        "이 이미지에 있는 모든 텍스트를 빠짐없이 읽어주세요. "
+        "원본 레이아웃(줄바꿈, 들여쓰기)을 최대한 유지하세요."
+    )
+
+    def _run_bbox_passes(
+        self, image_path: str, *, allow_plain_fallback: bool
+    ) -> tuple[list[VlmOcrItem], str, str]:
+        """bbox 프롬프트(한/영) 시도. (items, label, raw)."""
+        labels = ("bbox_ko", "bbox_en")
+        last_raw = ""
+        processed_size: tuple[int, int] | None = None
+
+        for label, prompt in zip(labels, self._bbox_ocr_prompts()):
+            raw, processed_size = self._chat(image_path, prompt)
+            last_raw = raw
+            items = self._parse_ocr_with_bbox(raw, processed_size)
+            has_bbox = any(it.bbox for it in items)
+            logger.info(
+                "%s: 항목 %d개, bbox %d개", label, len(items), sum(1 for it in items if it.bbox)
+            )
+            if items and has_bbox:
+                return items, label, raw
+
+        if allow_plain_fallback:
+            logger.info("bbox OCR 실패, 일반 OCR 재시도 (auto)")
+            raw_plain, _ = self._chat(image_path, self._PLAIN_OCR_PROMPT)
+            return self._parse_plain_ocr(raw_plain), "plain_fallback", raw_plain
+
+        return [], "bbox_failed", last_raw
+
+    def _run_plain_pass(self, image_path: str) -> tuple[list[VlmOcrItem], str, str]:
+        raw, _ = self._chat(image_path, self._PLAIN_OCR_PROMPT)
+        return self._parse_plain_ocr(raw), "plain", raw
+
+    def _run_custom_pass(
+        self, image_path: str, custom_prompt: str
+    ) -> tuple[list[VlmOcrItem], str, str]:
+        raw, processed_size = self._chat(image_path, custom_prompt)
+        items = self._parse_ocr_with_bbox(raw, processed_size)
+        if items:
+            return items, "custom_json", raw
+        return self._parse_plain_ocr(raw), "custom_plain", raw
+
     # ── VLM 메서드 ────────────────────────────────────
 
     def ocr(self, image_path: str, options: dict | None = None) -> VlmOcrResponse:
+        opts = options or {}
+        prompt_mode = str(opts.get("prompt_mode", "auto")).strip().lower() or "auto"
+        custom_prompt = str(opts.get("custom_prompt", "")).strip()
+
         t0 = time.time()
         try:
-            items: list[VlmOcrItem] = []
-            processed_size: tuple[int, int] | None = None
-
-            for attempt, prompt in enumerate(self._bbox_ocr_prompts(), start=1):
-                raw, processed_size = self._chat(image_path, prompt)
-                items = self._parse_ocr_with_bbox(raw, processed_size)
-                has_bbox = any(it.bbox for it in items)
-                logger.info(
-                    "bbox OCR 시도 %d: 항목 %d개, bbox %d개",
-                    attempt, len(items), sum(1 for it in items if it.bbox),
+            if prompt_mode == "custom":
+                if not custom_prompt:
+                    raise ValueError("커스텀 프롬프트가 비어 있습니다.")
+                items, label, raw = self._run_custom_pass(image_path, custom_prompt)
+            elif prompt_mode == "plain":
+                items, label, raw = self._run_plain_pass(image_path)
+            elif prompt_mode == "bbox":
+                items, label, raw = self._run_bbox_passes(
+                    image_path, allow_plain_fallback=False
                 )
-                if items and has_bbox:
-                    break
-
-            if not items or not any(it.bbox for it in items):
-                logger.info("bbox OCR 실패, 일반 OCR 재시도 (bbox 없음)")
-                plain_prompt = (
-                    "이 이미지에 있는 모든 텍스트를 빠짐없이 읽어주세요. "
-                    "원본 레이아웃(줄바꿈, 들여쓰기)을 최대한 유지하세요."
+            else:  # auto
+                items, label, raw = self._run_bbox_passes(
+                    image_path, allow_plain_fallback=True
                 )
-                raw_plain, _ = self._chat(image_path, plain_prompt)
-                items = self._parse_plain_ocr(raw_plain)
 
             elapsed = int((time.time() - t0) * 1000)
-            logger.info("파싱된 항목 수: %d, bbox 있는 항목: %d",
-                        len(items), sum(1 for it in items if it.bbox))
-            for it in items:
-                logger.info("  text=%s, bbox=%s", it.text, it.bbox)
+            logger.info(
+                "OCR 완료 mode=%s label=%s 항목=%d bbox=%d",
+                prompt_mode,
+                label,
+                len(items),
+                sum(1 for it in items if it.bbox),
+            )
             full_text = "\n".join(it.text for it in items)
             return VlmOcrResponse(
                 model_id=self.engine_id,
                 elapsed_ms=elapsed,
                 items=items,
                 full_text=full_text,
+                prompt_mode=prompt_mode,
+                prompt_label=label,
+                raw_response_preview=raw[:2000] if raw else None,
             )
         except Exception as exc:
             elapsed = int((time.time() - t0) * 1000)
@@ -212,6 +258,7 @@ class QwenVlmEngine(VlmEngine):
                 success=False,
                 model_id=self.engine_id,
                 elapsed_ms=elapsed,
+                prompt_mode=prompt_mode,
                 error=str(exc),
             )
 

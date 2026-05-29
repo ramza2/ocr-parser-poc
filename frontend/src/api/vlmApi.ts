@@ -4,6 +4,7 @@ import type {
   SchemaExtractResponse,
   SchemaField,
   VlmModelsResponse,
+  VlmOcrOptions,
   VlmOcrResponse,
 } from "../types/vlm";
 
@@ -37,11 +38,16 @@ export async function loadVlmModel(
 
 export async function vlmOcr(
   file: File,
-  modelId: string
+  modelId: string,
+  options?: VlmOcrOptions
 ): Promise<VlmOcrResponse> {
   const form = new FormData();
   form.append("file", file);
   form.append("model_id", modelId);
+  form.append("ocr_prompt_mode", options?.promptMode ?? "auto");
+  if (options?.customPrompt?.trim()) {
+    form.append("custom_prompt", options.customPrompt.trim());
+  }
   const res = await fetch("/api/vlm/ocr", { method: "POST", body: form });
   return parseJsonResponse<VlmOcrResponse>(res, "VLM OCR");
 }

@@ -62,7 +62,15 @@ class RemoteVlmEngine(VlmEngine):
         pass
 
     def ocr(self, image_path: str, options: dict | None = None) -> VlmOcrResponse:
-        return self._post_file("/api/vlm/ocr", image_path, VlmOcrResponse)
+        opts = options or {}
+        extra: dict[str, str] = {}
+        if opts.get("prompt_mode"):
+            extra["ocr_prompt_mode"] = str(opts["prompt_mode"])
+        if opts.get("custom_prompt"):
+            extra["custom_prompt"] = str(opts["custom_prompt"])
+        return self._post_file(
+            "/api/vlm/ocr", image_path, VlmOcrResponse, extra_data=extra
+        )
 
     def extract_schema(
         self,
@@ -101,11 +109,18 @@ class RemoteVlmEngine(VlmEngine):
             resp.raise_for_status()
             return QaResponse(**resp.json())
 
-    def _post_file(self, path: str, image_path: str, model_cls):
+    def _post_file(
+        self,
+        path: str,
+        image_path: str,
+        model_cls,
+        extra_data: dict[str, str] | None = None,
+    ):
+        data = {"model_id": self.engine_id, **(extra_data or {})}
         with self._client() as client, open(image_path, "rb") as fh:
             resp = client.post(
                 path,
-                data={"model_id": self.engine_id},
+                data=data,
                 files={
                     "file": (Path(image_path).name, fh, "application/octet-stream"),
                 },
