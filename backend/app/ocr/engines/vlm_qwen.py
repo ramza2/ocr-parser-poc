@@ -13,7 +13,6 @@ import re
 import time
 
 from app.ocr.engines.vlm_base import VlmEngine
-from app.ocr.engines.vlm_qa_helpers import try_answer_count_question
 from app.schemas.vlm import (
     BoundingBox,
     QaResponse,
@@ -379,90 +378,61 @@ class QwenVlmEngine(VlmEngine):
 
     @staticmethod
     def _build_qa_prompt(question: str) -> str:
-        """이미지 Q&A — 부분 대응·언어 선택·카운트는 별도 처리."""
+        """범용 이미지 Q&A 프롬프트."""
         q = question.strip()
         return (
             "You are a visual question-answering assistant for images containing "
-            "scene text, signs, documents, screens, and labels.\n\n"
-            "Answer the user's question using only information visibly present "
-            "in the image.\n"
+            "text, signs, documents, screens, objects, and natural scenes.\n\n"
+            "Answer the user's question using only what is visibly supported by "
+            "the image.\n"
             "Reply in the same language as the user's question.\n"
-            "Return plain text only unless the user explicitly requests JSON.\n\n"
-            "[Core Rules]\n\n"
-            "* Answer only what was asked.\n"
-            "* Do not transcribe or list all visible text unless the user "
-            "explicitly asks for full text, complete transcription, or OCR.\n"
-            "* Do not add translations, explanations, surrounding text, or "
-            "related text that was not requested.\n"
-            "* Never invent missing text or infer text that is not visible.\n\n"
-            "[Partial Text Matching Rules]\n\n"
-            "* When the question asks for the text corresponding to a specific "
-            "word, phrase, name, or component in another language or script, "
-            "return only the smallest visible text span that corresponds to that "
-            "requested component.\n"
-            "* Do not return the entire surrounding line, facility name, "
-            "signboard title, address, or sentence unless the question explicitly "
-            "asks for the full line or full name.\n"
-            "* For example, if a visible English line contains a place name, an "
-            "event name, and a facility type, and the question asks only for the "
-            "event name, return only the event-name portion.\n"
-            "* If multiple nearby text lines express the same meaning in different "
-            "languages, return only the language or script requested by the user.\n"
-            "* Examples: question about the English for 놋다리밟기 → Nottaribalggi; "
-            "for 전수교육관 → Training Center; for 안동 → Andong; for the full "
-            "English line → the entire English line.\n\n"
-            "[Language and Script Selection Rules]\n\n"
-            "* If the user asks for English text, answer using only the relevant "
-            "visible English text.\n"
-            "* If the user asks for Korean text, answer using only the relevant "
-            "visible Korean text.\n"
-            "* If the user asks for Chinese characters or Hanja, answer using only "
-            "the relevant visible Han-character text.\n"
-            "* Do not combine parallel translations from different lines unless the "
-            "user explicitly asks for all versions.\n\n"
-            "[Character Count Rules]\n\n"
-            "* Do not answer character-count questions yourself in this chat. "
-            "They are handled by another step.\n\n"
-            "[Answer Format]\n\n"
-            "* Give the shortest answer that fully satisfies the question.\n"
-            "* For a requested text fragment, return only that fragment unless "
-            "clarification is necessary.\n"
-            "* For an unanswerable or visually unclear question, say briefly that "
-            "it cannot be confirmed from the image.\n\n"
+            "Return plain text only unless the user explicitly requests another "
+            "format.\n\n"
+            "[Reasoning Policy]\n\n"
+            "* First identify the specific visual target, text span, object, "
+            "region, or relationship referred to by the user's question.\n"
+            "* Then answer only the requested attribute of that target, such as "
+            "its visible text, language, color, location, direction, count, shape, "
+            "or relationship.\n"
+            "* Keep the target as narrow as the question requires. Do not expand "
+            "it to surrounding lines, nearby labels, translations, or the whole "
+            "object unless the user asks for them.\n"
+            "* If the user refers to part of a visible text line or part of an "
+            "object, answer about that part only.\n"
+            "* If the user uses approximate or conversational wording, infer the "
+            "most likely visible referent from the image and answer naturally when "
+            "the referent is clear.\n"
+            "* If two or more visible referents are genuinely plausible and would "
+            "produce different answers, ask one brief clarification question instead "
+            "of guessing.\n\n"
+            "[Evidence Policy]\n\n"
+            "* Use only visual evidence present in the image.\n"
+            "* Do not invent, translate, paraphrase, combine, or complete text "
+            "unless the user explicitly asks for translation, interpretation, or "
+            "summarization.\n"
+            "* When asked for visible text, preserve the text as shown in the image.\n"
+            "* When asked for a visual property such as color, position, "
+            "orientation, or size, answer only that property for the identified "
+            "target.\n"
+            "* When asked for an exact count or exact measurement, provide a "
+            "result only when it can be determined reliably from the visible "
+            "content; otherwise state briefly that precise confirmation is "
+            "difficult from the image.\n\n"
+            "[Answer Policy]\n\n"
+            "* Answer directly and concisely.\n"
+            "* Do not provide the full OCR transcription unless the user explicitly "
+            "asks for it.\n"
+            "* Do not explain your internal reasoning.\n"
+            "* Do not mention unrelated visible content.\n"
+            "* If the answer cannot be confirmed from the image, say so briefly.\n\n"
             f"User question:\n{q}"
         )
-
-    def _ocr_full_text_for_qa(self, image_path: str) -> str:
-        """글자 수 계산용 — spotting OCR 1회."""
-        items, _, _ = self._run_single_vlm(
-            image_path, self._SPOTTING_OCR_PROMPT, "spotting"
-        )
-        if items:
-            return "\n".join(it.text for it in items)
-        return ""
 
     def ask(
         self, image_path: str, question: str, options: dict | None = None
     ) -> QaResponse:
         t0 = time.time()
         try:
-            opts = options or {}
-            preset_text = str(opts.get("ocr_full_text", "")).strip()
-
-            def ocr_getter() -> str:
-                if preset_text:
-                    return preset_text
-                return self._ocr_full_text_for_qa(image_path)
-
-            count_answer = try_answer_count_question(question, ocr_getter)
-            if count_answer is not None:
-                elapsed = int((time.time() - t0) * 1000)
-                return QaResponse(
-                    model_id=self.engine_id,
-                    elapsed_ms=elapsed,
-                    answer=count_answer,
-                )
-
             prompt = self._build_qa_prompt(question)
             answer, _ = self._chat(image_path, prompt)
             elapsed = int((time.time() - t0) * 1000)
