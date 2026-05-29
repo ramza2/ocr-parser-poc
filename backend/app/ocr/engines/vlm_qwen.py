@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 
 from app.ocr.engines.vlm_base import VlmEngine
@@ -336,17 +337,79 @@ class QwenVlmEngine(VlmEngine):
             return None
 
     @staticmethod
-    def _extract_json_array(raw: str) -> list[dict]:
-        """LLM 응답에서 JSON 배열 추출."""
-        start = raw.find("[")
-        end = raw.rfind("]")
-        if start == -1 or end == -1:
-            return []
-        try:
-            data = json.loads(raw[start:end + 1])
-            return data if isinstance(data, list) else []
-        except json.JSONDecodeError:
-            return []
+    def _strip_code_fences(raw: str) -> str:
+        text = raw.strip()
+        if not text.startswith("```"):
+            return text
+        lines = text.splitlines()
+        if len(lines) >= 2 and lines[-1].strip().startswith("```"):
+            return "\n".join(lines[1:-1]).strip()
+        return "\n".join(lines[1:]).strip()
+
+    @staticmethod
+    def _sanitize_json(text: str) -> str:
+        """LLM이 자주 내는 trailing comma 등 보정."""
+        return re.sub(r",(\s*[\]}])", r"\1", text)
+
+    @staticmethod
+    def _extract_json_objects_fallback(raw: str) -> list[dict]:
+        """배열 파싱 실패 시 개별 {...} 객체를 순차 파싱."""
+        objects: list[dict] = []
+        i = 0
+        while i < len(raw):
+            start = raw.find("{", i)
+            if start == -1:
+                break
+            depth = 0
+            for j in range(start, len(raw)):
+                ch = raw[j]
+                if ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        snippet = raw[start : j + 1]
+                        for candidate in (snippet, QwenVlmEngine._sanitize_json(snippet)):
+                            try:
+                                obj = json.loads(candidate)
+                                if isinstance(obj, dict):
+                                    objects.append(obj)
+                                break
+                            except json.JSONDecodeError:
+                                continue
+                        i = j + 1
+                        break
+            else:
+                break
+        return objects
+
+    @classmethod
+    def _extract_json_array(cls, raw: str) -> list[dict]:
+        """LLM 응답에서 JSON 배열 추출 (trailing comma·코드펜스 tolerant)."""
+        cleaned = cls._strip_code_fences(raw)
+        start = cleaned.find("[")
+        end = cleaned.rfind("]")
+        if start != -1 and end != -1 and end > start:
+            chunk = cleaned[start : end + 1]
+            for label, candidate in (
+                ("strict", chunk),
+                ("sanitized", cls._sanitize_json(chunk)),
+            ):
+                try:
+                    data = json.loads(candidate)
+                    if isinstance(data, list):
+                        items = [x for x in data if isinstance(x, dict)]
+                        if items:
+                            if label == "sanitized":
+                                logger.info("JSON 배열: trailing comma 보정 후 파싱 성공")
+                            return items
+                except json.JSONDecodeError as exc:
+                    logger.debug("JSON 배열 %s 파싱 실패: %s", label, exc)
+
+        fallback = cls._extract_json_objects_fallback(cleaned)
+        if fallback:
+            logger.info("JSON 배열 파싱 실패 → 개별 객체 %d개 추출", len(fallback))
+        return fallback
 
     @staticmethod
     def _entry_bbox(entry: dict) -> list | None:
