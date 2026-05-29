@@ -183,7 +183,11 @@ class QwenVlmEngine(VlmEngine):
 
     def ocr(self, image_path: str, options: dict | None = None) -> VlmOcrResponse:
         opts = options or {}
-        prompt_mode = str(opts.get("prompt_mode", "auto")).strip().lower() or "auto"
+        raw_mode = str(opts.get("prompt_mode", "spotting")).strip().lower() or "spotting"
+        # 구 API 호환 (auto, bbox, plain → spotting)
+        prompt_mode = (
+            "custom" if raw_mode == "custom" else "spotting"
+        )
         custom_prompt = str(opts.get("custom_prompt", "")).strip()
 
         t0 = time.time()
@@ -195,7 +199,6 @@ class QwenVlmEngine(VlmEngine):
                     image_path, custom_prompt, "custom"
                 )
             else:
-                # auto / bbox / plain(구버전): Qwen spotting 1회
                 items, label, raw = self._run_single_vlm(
                     image_path, self._SPOTTING_OCR_PROMPT, "spotting"
                 )
@@ -231,30 +234,30 @@ class QwenVlmEngine(VlmEngine):
 
     @staticmethod
     def _build_schema_prompt(schema: list[SchemaField]) -> str:
-        """Schema 필드 설명 + 공통 추출 규칙."""
+        """Schema 필드 설명 + Qwen bbox_2d 출력 규약."""
         lines: list[str] = []
         for i, f in enumerate(schema, start=1):
             desc = (f.description or f.key).strip()
-            lines.append(
-                f'{i}. key="{f.key}" — {desc} (타입: {f.type})'
-            )
+            lines.append(f'{i}. key="{f.key}" — {desc} (type: {f.type})')
 
         rules = [
-            "각 key마다 정확히 하나의 JSON 객체를 출력하세요 (key 개수와 배열 길이가 같아야 함).",
-            "value는 이미지에 실제로 보이는 텍스트를 그대로 사용하세요.",
-            "bbox는 해당 value 텍스트가 있는 한 줄(또는 블록) 전체를 감싸는 픽셀 좌표 "
-            "(좌상단 x,y → 우하단 x,y)입니다.",
-            "값을 찾을 수 없으면 value는 빈 문자열, bbox는 null입니다.",
+            "Return exactly one JSON object per schema key (array length must match).",
+            "Use the exact visible text from the image for value.",
+            "bbox_2d must tightly enclose the text region for that value.",
+            "If a value is not found, use an empty string for value and null for bbox_2d.",
+            "Do not output markdown, code fences, explanations, or extra keys.",
         ]
 
         return (
-            "이 이미지에서 아래 Schema 항목 각각에 대해 value와 bbox를 추출하세요.\n\n"
-            "[추출 항목]\n"
+            "Extract each schema field from this image with its location.\n\n"
+            "Return ONLY a valid JSON array.\n\n"
+            "[Fields]\n"
             + "\n".join(lines)
-            + "\n\n[규칙]\n"
-            + "\n".join(f"- {r}" for r in rules)
-            + "\n\n반드시 JSON 배열만 응답하세요. 형식:\n"
-            '[{"key": "스키마키", "value": "추출값", "bbox": [x1, y1, x2, y2]}]\n'
+            + "\n\n[Rules]\n"
+            + "\n".join(f"* {r}" for r in rules)
+            + "\n\nUse exactly this schema for every field:\n"
+            '[{"key": "schema_key", "value": "extracted text", '
+            '"bbox_2d": [x1, y1, x2, y2]}]\n'
         )
 
     def extract_schema(
@@ -360,6 +363,15 @@ class QwenVlmEngine(VlmEngine):
                 return str(val).strip()
         return ""
 
+    @staticmethod
+    def _entry_schema_value(entry: dict) -> str:
+        """Schema JSON 항목에서 추출값 (value / text_content / text)."""
+        for key in ("value", "text_content", "text"):
+            val = entry.get(key)
+            if val is not None and str(val).strip():
+                return str(val).strip()
+        return ""
+
     def _parse_ocr_with_bbox(
         self, raw: str, img_size: tuple[int, int] | None = None
     ) -> list[VlmOcrItem]:
@@ -397,7 +409,7 @@ class QwenVlmEngine(VlmEngine):
         items: list[SchemaExtractItem] = []
         for f in schema:
             entry = result_map.get(f.key, {})
-            value = str(entry.get("value", "")) if entry else ""
+            value = self._entry_schema_value(entry) if entry else ""
             bbox = (
                 self._to_bbox(self._entry_bbox(entry), img_size) if entry else None
             )

@@ -85,7 +85,7 @@ async def load_model(model_id: str = Form(...)):
 async def vlm_ocr(
     file: UploadFile = File(...),
     model_id: str = Form(...),
-    ocr_prompt_mode: str = Form("auto"),
+    ocr_prompt_mode: str = Form("spotting"),
     custom_prompt: str = Form(""),
 ) -> VlmOcrResponse:
     registry = _get_registry()
@@ -110,7 +110,7 @@ async def vlm_ocr(
     content = await file.read()
     tmp = save_upload_to_temp(content, file.filename or "upload.png")
     ocr_options = {
-        "prompt_mode": ocr_prompt_mode.strip().lower() or "auto",
+        "prompt_mode": ocr_prompt_mode.strip().lower() or "spotting",
         "custom_prompt": custom_prompt.strip(),
     }
     try:

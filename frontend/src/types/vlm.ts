@@ -13,7 +13,7 @@ export interface VlmOcrItem {
   bbox?: BoundingBox | null;
 }
 
-export type VlmOcrPromptMode = "auto" | "bbox" | "custom";
+export type VlmOcrPromptMode = "spotting" | "custom";
 
 export interface VlmOcrOptions {
   promptMode?: VlmOcrPromptMode;

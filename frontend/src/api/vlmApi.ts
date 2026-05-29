@@ -44,7 +44,7 @@ export async function vlmOcr(
   const form = new FormData();
   form.append("file", file);
   form.append("model_id", modelId);
-  form.append("ocr_prompt_mode", options?.promptMode ?? "auto");
+  form.append("ocr_prompt_mode", options?.promptMode ?? "spotting");
   if (options?.customPrompt?.trim()) {
     form.append("custom_prompt", options.customPrompt.trim());
   }

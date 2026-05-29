@@ -60,7 +60,7 @@ export default function VlmPage() {
   const [ocrResult, setOcrResult] = useState<VlmOcrResponse | null>(null);
   const [schemaResult, setSchemaResult] = useState<SchemaExtractResponse | null>(null);
   const [qaHistory, setQaHistory] = useState<QaEntry[]>([]);
-  const [ocrPromptMode, setOcrPromptMode] = useState<VlmOcrPromptMode>("auto");
+  const [ocrPromptMode, setOcrPromptMode] = useState<VlmOcrPromptMode>("spotting");
   const [customPrompt, setCustomPrompt] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);

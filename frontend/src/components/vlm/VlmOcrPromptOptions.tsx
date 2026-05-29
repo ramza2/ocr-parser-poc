@@ -2,19 +2,14 @@ import type { VlmOcrPromptMode } from "../../types/vlm";
 
 const MODES: { id: VlmOcrPromptMode; label: string; desc: string }[] = [
   {
-    id: "auto",
-    label: "기본 (spotting)",
-    desc: "Qwen bbox_2d 1회",
-  },
-  {
-    id: "bbox",
-    label: "spotting",
-    desc: "기본과 동일 (1회)",
+    id: "spotting",
+    label: "Spotting",
+    desc: "Qwen bbox_2d + text_content (1회)",
   },
   {
     id: "custom",
     label: "커스텀",
-    desc: "직접 입력 프롬프트 1회",
+    desc: "직접 입력 프롬프트 (1회)",
   },
 ];
 
@@ -57,7 +52,7 @@ export default function VlmOcrPromptOptions({
   return (
     <div className="space-y-2">
       <h3 className="text-sm font-semibold text-slate-700">OCR 프롬프트</h3>
-      <div className="grid grid-cols-3 gap-1.5">
+      <div className="grid grid-cols-2 gap-1.5">
         {MODES.map((m) => (
           <button
             key={m.id}
@@ -87,7 +82,7 @@ export default function VlmOcrPromptOptions({
             onClick={fillSpottingPreset}
             className="rounded border border-slate-200 px-2 py-0.5 text-[10px] text-slate-600 hover:bg-slate-50 disabled:opacity-50"
           >
-            Qwen spotting 예시
+            Spotting 프롬프트 예시
           </button>
           <textarea
             value={customPrompt}
