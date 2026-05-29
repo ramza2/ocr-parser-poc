@@ -31,8 +31,8 @@ router = APIRouter(prefix="/vlm")
 
 
 def _get_registry():
-    from app.ocr.engines.vlm_registry import VLM_ENGINES
-    return VLM_ENGINES
+    from app.ocr.engines.vlm_registry import ensure_vlm_registry
+    return ensure_vlm_registry()
 
 
 def _get_manager():
@@ -44,7 +44,11 @@ def _get_manager():
 
 @router.get("/models")
 async def list_models() -> VlmModelsResponse:
-    registry = _get_registry()
+    from app.ocr.engines.vlm_registry import ensure_vlm_registry
+
+    registry = ensure_vlm_registry()
+    if not registry:
+        registry = ensure_vlm_registry(refresh=True)
     mgr = _get_manager()
     models = [
         VlmModelInfo(

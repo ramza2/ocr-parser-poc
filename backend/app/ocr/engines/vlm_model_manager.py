@@ -17,8 +17,8 @@ _current_engine_id: str | None = None
 
 
 def _get_registry() -> dict:
-    from app.ocr.engines.vlm_registry import VLM_ENGINES
-    return VLM_ENGINES
+    from app.ocr.engines.vlm_registry import ensure_vlm_registry
+    return ensure_vlm_registry()
 
 
 def get_current_model_id() -> str | None:

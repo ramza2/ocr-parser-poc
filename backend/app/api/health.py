@@ -8,8 +8,13 @@ router = APIRouter()
 
 @router.get("/health")
 def health_check():
+    from app.ocr.engines.vlm_registry import _worker_url
+
+    worker = _worker_url()
     return {
         "status": "ok",
         "service": "ocr-parser-poc",
         "gpu": gpu_runtime_status(),
+        "vlm_mode": "remote" if worker else "local",
+        "vlm_worker_url": worker or None,
     }

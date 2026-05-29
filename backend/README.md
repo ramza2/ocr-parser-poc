@@ -137,6 +137,57 @@ Vision Language Model 기반 OCR/Schema 추출/Q&A 엔진.
 
 UI 상단의 **VLM** 탭에서 사용. 한 번에 하나의 VLM 모델만 GPU 에 로드됩니다.
 
+#### VLM 원격 워커 (GPU PC + Ubuntu 서버 분리)
+
+GPU가 없는 Ubuntu 서버에서는 OCR/API만 두고, VLM은 GPU PC에서 **전용 워커**로 실행합니다.
+
+| 구성 | 역할 | Compose |
+|------|------|---------|
+| **GPU PC** | VLM 추론 전용 (`/api/vlm/*`) | `docker-compose.vlm-worker.yml` → `:8001` |
+| **Ubuntu 서버** | OCR·API·프론트, VLM은 원격 프록시 | `docker-compose.yml` + `VLM_WORKER_URL` |
+
+**1) GPU PC (개발 PC) — VLM 워커**
+
+```bash
+# NVIDIA Container Toolkit 설치 후
+docker compose -f docker-compose.vlm-worker.yml up --build -d
+
+# 확인
+curl http://localhost:8001/api/health
+curl http://localhost:8001/api/vlm/models
+```
+
+- HuggingFace 캐시: Docker volume `vlm_hf_cache` (또는 `HF_HOME=/cache/huggingface`)
+- Windows PC IP 확인: `ipconfig` → Ubuntu에서 접근 가능한 LAN IP 사용
+
+**2) Ubuntu 서버 — 메인 스택**
+
+프로젝트 루트에 `.env` 파일:
+
+```env
+VLM_WORKER_URL=http://192.168.0.10:8001
+```
+
+(`192.168.0.10` → GPU PC의 실제 IP)
+
+```bash
+docker compose up --build -d
+
+# VLM 원격 모드 확인
+curl http://localhost:8000/api/health
+# → "vlm_mode": "remote", "vlm_worker_url": "http://..."
+```
+
+**3) 동작**
+
+- 프론트 `/api/vlm/*` → Ubuntu backend → GPU PC `:8001` 프록시
+- Ubuntu backend 이미지에는 torch/transformers 미포함 (경량)
+- GPU PC 워커 이미지에는 Paddle 미포함 (VRAM 절약)
+
+**4) 로컬 개발 (워커 없이)**
+
+`VLM_WORKER_URL`을 비우고 backend에서 `requirements-vlm.txt` 설치 후 기존처럼 로컬 VLM 사용.
+
 ## 선택 설치
 
 - **Tesseract** + `kor`/`eng`: `TESSERACT_OCR`, `PDF_TESSERACT_OCR`

@@ -6,6 +6,9 @@ services:
     container_name: ocr-parser-poc-backend
     ports:
       - "8000:8000"
+    environment:
+      # GPU PC VLM 워커 URL (예: http://192.168.0.10:8001)
+      VLM_WORKER_URL: ${VLM_WORKER_URL:-}
     restart: unless-stopped
     healthcheck:
       test:

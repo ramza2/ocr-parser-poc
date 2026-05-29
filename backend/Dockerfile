@@ -15,12 +15,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY requirements.txt requirements-paddle.txt requirements-aihub.txt requirements-vlm.txt ./
+COPY requirements.txt requirements-paddle.txt requirements-aihub.txt ./
 # paddle 설치 실패 시 빌드 중단 (|| true 제거 — 런타임 No module named 'paddle' 방지)
+# VLM은 VLM_WORKER_URL 원격 워커 사용 시 서버에 torch/transformers 불필요
 RUN pip install -r requirements.txt \
     && pip install -r requirements-paddle.txt \
-    && pip install -r requirements-aihub.txt \
-    && pip install -r requirements-vlm.txt || true
+    && pip install -r requirements-aihub.txt
 
 COPY app ./app
 
