@@ -109,6 +109,12 @@ async def vlm_ocr(
     tmp = save_upload_to_temp(content, file.filename or "upload.png")
     try:
         return engine.ocr(tmp)
+    except Exception as exc:
+        logger.exception("VLM OCR 실패")
+        return VlmOcrResponse(
+            success=False, model_id=model_id,
+            error=f"VLM OCR 실패: {exc}",
+        )
     finally:
         remove_file(tmp)
 
@@ -153,6 +159,12 @@ async def vlm_extract(
     tmp = save_upload_to_temp(content, file.filename or "upload.png")
     try:
         return engine.extract_schema(tmp, schema)
+    except Exception as exc:
+        logger.exception("VLM Schema 추출 실패")
+        return SchemaExtractResponse(
+            success=False, model_id=model_id,
+            error=f"VLM Schema 추출 실패: {exc}",
+        )
     finally:
         remove_file(tmp)
 
@@ -188,5 +200,11 @@ async def vlm_ask(
     tmp = save_upload_to_temp(content, file.filename or "upload.png")
     try:
         return engine.ask(tmp, question)
+    except Exception as exc:
+        logger.exception("VLM Q&A 실패")
+        return QaResponse(
+            success=False, model_id=model_id,
+            error=f"VLM Q&A 실패: {exc}",
+        )
     finally:
         remove_file(tmp)
