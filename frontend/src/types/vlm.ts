@@ -86,5 +86,6 @@ export interface QaResponse {
   model_id: string;
   elapsed_ms: number;
   answer: string;
+  confidence?: number | null;
   error?: string | null;
 }
