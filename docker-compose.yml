@@ -7,8 +7,10 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # GPU PC VLM 워커 URL (예: http://192.168.0.10:8001)
+      # VLM 워커 URL (다른 PC: LAN IP / 같은 서버: host.docker.internal)
       VLM_WORKER_URL: ${VLM_WORKER_URL:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
     healthcheck:
       test:
