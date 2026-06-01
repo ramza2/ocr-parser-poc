@@ -48,6 +48,21 @@ def _pick_model() -> str:
     return _HF_MODEL_DEFAULT
 
 
+def _pick_device_map(has_gpu: bool):
+    """
+    Qwen 로드 디바이스 맵.
+    기본은 단일 GPU 고정(single)으로 latency 우선.
+    - QWEN_DEVICE_MAP=auto  : 이전 방식
+    - QWEN_DEVICE_MAP=single: 단일 GPU(cuda:0)
+    """
+    if not has_gpu:
+        return "cpu"
+    mode = os.environ.get("QWEN_DEVICE_MAP", "single").strip().lower()
+    if mode == "auto":
+        return "auto"
+    return "cuda:0"
+
+
 class QwenVlmEngine(VlmEngine):
     engine_id = "qwen_vl"
     name = "Qwen2.5-VL"
@@ -72,12 +87,13 @@ class QwenVlmEngine(VlmEngine):
         hf_model = self.model_id
         has_gpu = torch.cuda.is_available()
 
+        device_map = _pick_device_map(has_gpu)
         load_kwargs: dict = {
             "torch_dtype": torch.float16 if has_gpu else torch.float32,
-            "device_map": "auto" if has_gpu else "cpu",
+            "device_map": device_map,
         }
 
-        logger.info("Qwen2.5-VL 로드 시작: %s", hf_model)
+        logger.info("Qwen2.5-VL 로드 시작: %s (device_map=%s)", hf_model, device_map)
         self._processor = AutoProcessor.from_pretrained(
             hf_model,
             min_pixels=_MIN_PIXELS,
@@ -87,6 +103,8 @@ class QwenVlmEngine(VlmEngine):
             hf_model, **load_kwargs
         )
         self._model.eval()
+        if hasattr(self._model, "hf_device_map"):
+            logger.info("Qwen2.5-VL hf_device_map=%s", getattr(self._model, "hf_device_map"))
         logger.info("Qwen2.5-VL 로드 완료 (%s)", hf_model)
 
     def unload(self) -> None:
