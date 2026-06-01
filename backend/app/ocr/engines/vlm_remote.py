@@ -68,6 +68,8 @@ class RemoteVlmEngine(VlmEngine):
             extra["ocr_prompt_mode"] = str(opts["prompt_mode"])
         if opts.get("custom_prompt"):
             extra["custom_prompt"] = str(opts["custom_prompt"])
+        if opts.get("output_format"):
+            extra["output_format"] = str(opts["output_format"])
         return self._post_file(
             "/api/vlm/ocr", image_path, VlmOcrResponse, extra_data=extra
         )
@@ -81,12 +83,14 @@ class RemoteVlmEngine(VlmEngine):
         import json
 
         fields = [f.model_dump() for f in schema]
+        opts = options or {}
         with self._client() as client, open(image_path, "rb") as fh:
             resp = client.post(
                 "/api/vlm/extract",
                 data={
                     "model_id": self.engine_id,
                     "schema_fields_json": json.dumps(fields, ensure_ascii=False),
+                    "output_format": str(opts.get("output_format", "bbox")),
                 },
                 files={
                     "file": (Path(image_path).name, fh, "application/octet-stream"),
@@ -98,10 +102,15 @@ class RemoteVlmEngine(VlmEngine):
     def ask(
         self, image_path: str, question: str, options: dict | None = None
     ) -> QaResponse:
+        opts = options or {}
         with self._client() as client, open(image_path, "rb") as fh:
             resp = client.post(
                 "/api/vlm/ask",
-                data={"model_id": self.engine_id, "question": question},
+                data={
+                    "model_id": self.engine_id,
+                    "question": question,
+                    "output_format": str(opts.get("output_format", "bbox")),
+                },
                 files={
                     "file": (Path(image_path).name, fh, "application/octet-stream"),
                 },

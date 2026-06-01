@@ -6,6 +6,7 @@ import type {
   VlmModelsResponse,
   VlmOcrOptions,
   VlmOcrResponse,
+  VlmRequestOptions,
 } from "../types/vlm";
 
 async function parseJsonResponse<T>(res: Response, label: string): Promise<T> {
@@ -45,6 +46,7 @@ export async function vlmOcr(
   form.append("file", file);
   form.append("model_id", modelId);
   form.append("ocr_prompt_mode", options?.promptMode ?? "spotting");
+  form.append("output_format", options?.outputFormat ?? "bbox");
   const promptText = options?.customPrompt?.trim() ?? "";
   if (promptText) {
     form.append("custom_prompt", promptText);
@@ -56,12 +58,14 @@ export async function vlmOcr(
 export async function vlmExtract(
   file: File,
   modelId: string,
-  schema: SchemaField[]
+  schema: SchemaField[],
+  options?: VlmRequestOptions
 ): Promise<SchemaExtractResponse> {
   const form = new FormData();
   form.append("file", file);
   form.append("model_id", modelId);
   form.append("schema_fields_json", JSON.stringify(schema));
+  form.append("output_format", options?.outputFormat ?? "bbox");
   const res = await fetch("/api/vlm/extract", { method: "POST", body: form });
   return parseJsonResponse<SchemaExtractResponse>(res, "VLM Schema 추출");
 }
@@ -69,12 +73,14 @@ export async function vlmExtract(
 export async function vlmAsk(
   file: File,
   modelId: string,
-  question: string
+  question: string,
+  options?: VlmRequestOptions
 ): Promise<QaResponse> {
   const form = new FormData();
   form.append("file", file);
   form.append("model_id", modelId);
   form.append("question", question);
+  form.append("output_format", options?.outputFormat ?? "bbox");
   const res = await fetch("/api/vlm/ask", { method: "POST", body: form });
   return parseJsonResponse<QaResponse>(res, "VLM Q&A");
 }

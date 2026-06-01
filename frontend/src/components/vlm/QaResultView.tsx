@@ -1,5 +1,6 @@
 import type { QaResponse } from "../../types/vlm";
 import ConfidenceBadge from "./ConfidenceBadge";
+import { formatOutputFormatLabel } from "./VlmOutputFormatSelector";
 
 interface QaEntry {
   question: string;
@@ -39,6 +40,11 @@ export default function QaResultView({ history }: Props) {
                     <span className="text-[10px] text-slate-400">
                       {entry.response.model_id} · {entry.response.elapsed_ms}ms
                     </span>
+                    {entry.response.output_format && (
+                      <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] text-violet-800">
+                        {formatOutputFormatLabel(entry.response.output_format)}
+                      </span>
+                    )}
                     <ConfidenceBadge value={entry.response.confidence} />
                   </div>
                 </>

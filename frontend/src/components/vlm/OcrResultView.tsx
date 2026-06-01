@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { VlmOcrResponse } from "../../types/vlm";
 import ConfidenceBadge from "./ConfidenceBadge";
 import ImageWithBbox from "./ImageWithBbox";
+import { formatOutputFormatLabel } from "./VlmOutputFormatSelector";
 
 interface Props {
   result: VlmOcrResponse;
@@ -28,6 +29,11 @@ export default function OcrResultView({ result, imageUrl }: Props) {
           <span className="rounded bg-amber-50 px-2 py-0.5 text-xs text-amber-800">
             {result.prompt_mode}
             {result.prompt_label ? ` · ${result.prompt_label}` : ""}
+          </span>
+        )}
+        {result.output_format && (
+          <span className="rounded bg-violet-50 px-2 py-0.5 text-xs text-violet-800">
+            {formatOutputFormatLabel(result.output_format)}
           </span>
         )}
       </div>

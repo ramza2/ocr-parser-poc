@@ -36,6 +36,7 @@ class VlmOcrResponse(BaseModel):
     error: str | None = None
     prompt_mode: str | None = None  # spotting | custom
     prompt_label: str | None = None  # 실제 사용 단계 (spotting, custom 등)
+    output_format: str | None = None  # bbox | text_only
     raw_response_preview: str | None = None  # 모델 원본 응답 앞부분 (디버그)
 
 
@@ -67,6 +68,7 @@ class SchemaExtractResponse(BaseModel):
     model_id: str
     elapsed_ms: int = 0
     items: list[SchemaExtractItem] = Field(default_factory=list)
+    output_format: str | None = None  # bbox | text_only
     error: str | None = None
 
 
@@ -78,6 +80,7 @@ class QaResponse(BaseModel):
     elapsed_ms: int = 0
     answer: str = ""
     confidence: float | None = None
+    output_format: str | None = None  # bbox | text_only
     error: str | None = None
 
 

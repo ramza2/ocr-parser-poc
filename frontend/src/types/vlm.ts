@@ -15,9 +15,16 @@ export interface VlmOcrItem {
 
 export type VlmOcrPromptMode = "spotting" | "custom";
 
+export type VlmOutputFormat = "bbox" | "text_only";
+
 export interface VlmOcrOptions {
   promptMode?: VlmOcrPromptMode;
   customPrompt?: string;
+  outputFormat?: VlmOutputFormat;
+}
+
+export interface VlmRequestOptions {
+  outputFormat?: VlmOutputFormat;
 }
 
 export interface VlmOcrResponse {
@@ -29,6 +36,7 @@ export interface VlmOcrResponse {
   error?: string | null;
   prompt_mode?: string | null;
   prompt_label?: string | null;
+  output_format?: string | null;
   raw_response_preview?: string | null;
 }
 
@@ -63,6 +71,7 @@ export interface SchemaExtractResponse {
   model_id: string;
   elapsed_ms: number;
   items: SchemaExtractItem[];
+  output_format?: string | null;
   error?: string | null;
 }
 
@@ -87,5 +96,6 @@ export interface QaResponse {
   elapsed_ms: number;
   answer: string;
   confidence?: number | null;
+  output_format?: string | null;
   error?: string | null;
 }

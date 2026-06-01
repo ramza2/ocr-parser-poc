@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { SchemaExtractResponse } from "../../types/vlm";
 import ImageWithBbox from "./ImageWithBbox";
+import { formatOutputFormatLabel } from "./VlmOutputFormatSelector";
 
 interface Props {
   result: SchemaExtractResponse;
@@ -20,6 +21,11 @@ export default function SchemaResultView({ result, imageUrl }: Props) {
         <span className="text-xs text-slate-500">
           {result.elapsed_ms.toLocaleString()}ms
         </span>
+        {result.output_format && (
+          <span className="rounded bg-violet-50 px-2 py-0.5 text-xs text-violet-800">
+            {formatOutputFormatLabel(result.output_format)}
+          </span>
+        )}
       </div>
 
       <div className={hasBbox ? "grid grid-cols-2 gap-4" : ""}>

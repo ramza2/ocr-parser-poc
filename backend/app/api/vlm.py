@@ -87,6 +87,7 @@ async def vlm_ocr(
     model_id: str = Form(...),
     ocr_prompt_mode: str = Form("spotting"),
     custom_prompt: str = Form(""),
+    output_format: str = Form("bbox"),
 ) -> VlmOcrResponse:
     registry = _get_registry()
     mgr = _get_manager()
@@ -112,6 +113,7 @@ async def vlm_ocr(
     ocr_options = {
         "prompt_mode": ocr_prompt_mode.strip().lower() or "spotting",
         "custom_prompt": custom_prompt.strip(),
+        "output_format": output_format.strip().lower() or "bbox",
     }
     try:
         return engine.ocr(tmp, ocr_options)
@@ -133,6 +135,7 @@ async def vlm_extract(
     file: UploadFile = File(...),
     model_id: str = Form(...),
     schema_fields_json: str = Form(...),
+    output_format: str = Form("bbox"),
 ) -> SchemaExtractResponse:
     registry = _get_registry()
     mgr = _get_manager()
@@ -165,7 +168,11 @@ async def vlm_extract(
     content = await file.read()
     tmp = save_upload_to_temp(content, file.filename or "upload.png")
     try:
-        return engine.extract_schema(tmp, schema)
+        return engine.extract_schema(
+            tmp,
+            schema,
+            {"output_format": output_format.strip().lower() or "bbox"},
+        )
     except Exception as exc:
         logger.exception("VLM Schema 추출 실패")
         return SchemaExtractResponse(
@@ -183,6 +190,7 @@ async def vlm_ask(
     file: UploadFile = File(...),
     model_id: str = Form(...),
     question: str = Form(...),
+    output_format: str = Form("bbox"),
 ) -> QaResponse:
     registry = _get_registry()
     mgr = _get_manager()
@@ -206,7 +214,11 @@ async def vlm_ask(
     content = await file.read()
     tmp = save_upload_to_temp(content, file.filename or "upload.png")
     try:
-        return engine.ask(tmp, question)
+        return engine.ask(
+            tmp,
+            question,
+            {"output_format": output_format.strip().lower() or "bbox"},
+        )
     except Exception as exc:
         logger.exception("VLM Q&A 실패")
         return QaResponse(

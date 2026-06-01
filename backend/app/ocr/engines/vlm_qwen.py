@@ -126,7 +126,9 @@ class QwenVlmEngine(VlmEngine):
         )
         return rw, rh
 
-    def _chat(self, image_path: str, prompt: str) -> tuple[str, tuple[int, int]]:
+    def _chat(
+        self, image_path: str, prompt: str, max_new_tokens: int = 2048
+    ) -> tuple[str, tuple[int, int]]:
         """이미지 + 프롬프트 → (텍스트 응답, processor 리사이즈 크기)."""
         import torch
         from qwen_vl_utils import process_vision_info
@@ -157,7 +159,7 @@ class QwenVlmEngine(VlmEngine):
         with torch.no_grad():
             ids = self._model.generate(
                 **inputs,
-                max_new_tokens=2048,
+                max_new_tokens=max_new_tokens,
                 do_sample=False,
             )
         trimmed = ids[:, inputs.input_ids.shape[1]:]
@@ -197,17 +199,62 @@ class QwenVlmEngine(VlmEngine):
         "anywhere in the image."
     )
 
+    _PLAIN_OCR_PROMPT = (
+        "You are a scene-text OCR engine.\n\n"
+        "Find and transcribe ALL visible text in this image, whether it appears in:\n\n"
+        "* a document or mobile screen,\n"
+        "* a signboard, road sign, direction board, label, poster, or product,\n"
+        "* an outdoor or natural scene.\n\n"
+        "Pay special attention to Korean, English, Chinese characters, numbers, "
+        "and punctuation.\n\n"
+        "Return ONLY the recognized text, preserving line breaks as in the image.\n"
+        "Reading order: top to bottom, left to right.\n\n"
+        "Rules:\n\n"
+        "* Do not output JSON, coordinates, bbox, markdown, explanations, or "
+        "comments.\n"
+        "* Preserve text exactly as it appears.\n"
+        "* Return an empty response only when there are truly no visible "
+        "characters anywhere in the image."
+    )
+
+    _OUTPUT_FORMATS = frozenset({"bbox", "text_only"})
+
+    @classmethod
+    def _normalize_output_format(cls, opts: dict | None) -> str:
+        fmt = str((opts or {}).get("output_format", "bbox")).strip().lower()
+        return fmt if fmt in cls._OUTPUT_FORMATS else "bbox"
+
+    @classmethod
+    def _max_new_tokens(cls, output_format: str, task: str) -> int:
+        if output_format == "text_only":
+            if task == "qa":
+                return 256
+            if task == "schema":
+                return 512
+            return 512
+        return 2048
+
     def _run_single_vlm(
-        self, image_path: str, prompt: str, label: str
+        self,
+        image_path: str,
+        prompt: str,
+        label: str,
+        output_format: str = "bbox",
     ) -> tuple[list[VlmOcrItem], str, str]:
-        """VLM 1회 호출 → JSON 파싱 (재시도 없음)."""
-        raw, processed_size = self._chat(image_path, prompt)
-        items = self._parse_ocr_with_bbox(raw, processed_size)
+        """VLM 1회 호출 → 파싱 (재시도 없음)."""
+        max_tokens = self._max_new_tokens(output_format, "ocr")
+        raw, processed_size = self._chat(image_path, prompt, max_new_tokens=max_tokens)
+        if output_format == "text_only":
+            items = self._parse_plain_ocr(raw)
+        else:
+            items = self._parse_ocr_with_bbox(raw, processed_size)
         logger.info(
-            "%s: 항목 %d개, bbox %d개",
+            "%s: 항목 %d개, bbox %d개, format=%s, max_tokens=%d",
             label,
             len(items),
             sum(1 for it in items if it.bbox),
+            output_format,
+            max_tokens,
         )
         return items, label, raw
 
@@ -215,6 +262,7 @@ class QwenVlmEngine(VlmEngine):
 
     def ocr(self, image_path: str, options: dict | None = None) -> VlmOcrResponse:
         opts = options or {}
+        output_format = self._normalize_output_format(opts)
         raw_mode = str(opts.get("prompt_mode", "spotting")).strip().lower() or "spotting"
         # 구 API 호환 (auto, bbox, plain → spotting)
         prompt_mode = (
@@ -229,17 +277,23 @@ class QwenVlmEngine(VlmEngine):
                     raise ValueError("커스텀 프롬프트가 비어 있습니다.")
                 prompt = custom_prompt
                 label = "custom"
+            elif output_format == "text_only":
+                prompt = custom_prompt or self._PLAIN_OCR_PROMPT
+                label = "plain"
             else:
                 # spotting: UI가 보낸 프롬프트 우선 (워커·프론트 불일치 방지)
                 prompt = custom_prompt or self._SPOTTING_OCR_PROMPT
                 label = "spotting"
-            items, label, raw = self._run_single_vlm(image_path, prompt, label)
+            items, label, raw = self._run_single_vlm(
+                image_path, prompt, label, output_format=output_format
+            )
 
             elapsed = int((time.time() - t0) * 1000)
             logger.info(
-                "OCR 완료 mode=%s label=%s 항목=%d bbox=%d",
+                "OCR 완료 mode=%s label=%s format=%s 항목=%d bbox=%d",
                 prompt_mode,
                 label,
+                output_format,
                 len(items),
                 sum(1 for it in items if it.bbox),
             )
@@ -251,6 +305,7 @@ class QwenVlmEngine(VlmEngine):
                 full_text=full_text,
                 prompt_mode=prompt_mode,
                 prompt_label=label,
+                output_format=output_format,
                 raw_response_preview=raw[:2000] if raw else None,
             )
         except Exception as exc:
@@ -261,6 +316,7 @@ class QwenVlmEngine(VlmEngine):
                 model_id=self.engine_id,
                 elapsed_ms=elapsed,
                 prompt_mode=prompt_mode,
+                output_format=output_format,
                 error=str(exc),
             )
 
@@ -310,10 +366,41 @@ class QwenVlmEngine(VlmEngine):
         )
 
     @classmethod
-    def _build_schema_prompt(cls, schema: list[SchemaField]) -> str:
+    def _build_schema_prompt(
+        cls, schema: list[SchemaField], *, with_bbox: bool = True
+    ) -> str:
         """Schema 추출 — match_mode별 규칙 (exact / script / semantic)."""
         targets = "\n".join(cls._format_schema_target(f) for f in schema)
         n = len(schema)
+        bbox_rules = (
+            'bbox_2d must tightly enclose the text returned in "value".\n'
+            if with_bbox
+            else ""
+        )
+        not_found_rule = (
+            'If target_text is not found, use value="" and bbox_2d=null.\n\n'
+            if with_bbox
+            else 'If target_text is not found, use value="".\n\n'
+        )
+        script_not_found = (
+            'If none found, use value="" and bbox_2d=null.\n\n'
+            if with_bbox
+            else 'If none found, use value="".\n\n'
+        )
+        semantic_not_found = (
+            'If not found, use value="" and bbox_2d=null.\n\n'
+            if with_bbox
+            else 'If not found, use value="".\n\n'
+        )
+        if with_bbox:
+            output_schema = (
+                '[{"key": "requested_key", "value": "extracted visible text", '
+                '"bbox_2d": [x1, y1, x2, y2]}]\n'
+            )
+        else:
+            output_schema = (
+                '[{"key": "requested_key", "value": "extracted visible text"}]\n'
+            )
         return (
             "You are a scene-text localization and extraction engine.\n\n"
             "Each target below has a match_mode. Follow only the rules for that "
@@ -326,7 +413,7 @@ class QwenVlmEngine(VlmEngine):
             'The output "key" must exactly copy the requested key string.\n'
             "Search documents, screens, signboards, labels, posters, outdoor scenes, "
             "embossed, shadowed, low-contrast, or angled text.\n"
-            'bbox_2d must tightly enclose the text returned in "value".\n'
+            f"{bbox_rules}"
             "Do not output markdown, code fences, explanations, comments, "
             "confidence scores, or additional keys.\n"
             "Output strict RFC 8259 JSON only, with no trailing commas.\n\n"
@@ -337,22 +424,21 @@ class QwenVlmEngine(VlmEngine):
             "same signboard or with the same meaning.\n"
             "Never include translations or equivalent wording.\n"
             "location_hint must never appear in value.\n"
-            'If target_text is not found, use value="" and bbox_2d=null.\n\n'
+            f"{not_found_rule}"
             "[script_filter rules]\n\n"
             '"value" must contain only characters of the requested script, '
             "transcribed exactly as visible.\n"
             "Do not include characters from other scripts in the same value.\n"
             "If multiple regions match, prefer the region indicated by location_hint; "
             "otherwise use the most prominent matching region.\n"
-            'If none found, use value="" and bbox_2d=null.\n\n'
+            f"{script_not_found}"
             "[semantic_field rules]\n\n"
             "Find the visible text that matches the locate description.\n"
             '"value" must be verbatim visible text from the image (no translation).\n'
             "location_hint helps position only; do not copy it into value.\n"
-            'If not found, use value="" and bbox_2d=null.\n\n'
+            f"{semantic_not_found}"
             "Use exactly this output schema:\n"
-            '[{"key": "requested_key", "value": "extracted visible text", '
-            '"bbox_2d": [x1, y1, x2, y2]}]\n'
+            f"{output_schema}"
         )
 
     @staticmethod
@@ -372,17 +458,32 @@ class QwenVlmEngine(VlmEngine):
         schema: list[SchemaField],
         options: dict | None = None,
     ) -> SchemaExtractResponse:
+        opts = options or {}
+        output_format = self._normalize_output_format(opts)
+        with_bbox = output_format == "bbox"
         t0 = time.time()
         try:
-            prompt = self._build_schema_prompt(schema)
-            raw, processed_size = self._chat(image_path, prompt)
-            logger.info("Qwen Schema 원본 응답:\n%s", raw[:2000])
+            prompt = self._build_schema_prompt(schema, with_bbox=with_bbox)
+            max_tokens = self._max_new_tokens(output_format, "schema")
+            raw, processed_size = self._chat(
+                image_path, prompt, max_new_tokens=max_tokens
+            )
+            logger.info(
+                "Qwen Schema 원본 응답 (format=%s, max_tokens=%d):\n%s",
+                output_format,
+                max_tokens,
+                raw[:2000],
+            )
             elapsed = int((time.time() - t0) * 1000)
-            items = self._parse_schema_with_bbox(raw, schema, processed_size)
+            if with_bbox:
+                items = self._parse_schema_with_bbox(raw, schema, processed_size)
+            else:
+                items = self._parse_schema_text_only(raw, schema)
             return SchemaExtractResponse(
                 model_id=self.engine_id,
                 elapsed_ms=elapsed,
                 items=items,
+                output_format=output_format,
             )
         except Exception as exc:
             elapsed = int((time.time() - t0) * 1000)
@@ -391,14 +492,15 @@ class QwenVlmEngine(VlmEngine):
                 success=False,
                 model_id=self.engine_id,
                 elapsed_ms=elapsed,
+                output_format=output_format,
                 error=str(exc),
             )
 
     @staticmethod
-    def _build_qa_prompt(question: str) -> str:
+    def _build_qa_prompt(question: str, *, text_only: bool = False) -> str:
         """범용 이미지 Q&A 프롬프트."""
         q = question.strip()
-        return (
+        base = (
             "You are a visual question-answering assistant for images containing "
             "text, signs, documents, screens, objects, and natural scenes.\n\n"
             "Answer the user's question using only what is visibly supported by "
@@ -443,21 +545,32 @@ class QwenVlmEngine(VlmEngine):
             "* Do not explain your internal reasoning.\n"
             "* Do not mention unrelated visible content.\n"
             "* If the answer cannot be confirmed from the image, say so briefly.\n\n"
-            f"User question:\n{q}"
         )
+        if text_only:
+            base += (
+                "[Output constraint]\n\n"
+                "* Answer in one or two short sentences when possible.\n"
+                "* Do not include JSON, coordinates, bbox, or markdown.\n\n"
+            )
+        return base + f"User question:\n{q}"
 
     def ask(
         self, image_path: str, question: str, options: dict | None = None
     ) -> QaResponse:
+        opts = options or {}
+        output_format = self._normalize_output_format(opts)
+        text_only = output_format == "text_only"
         t0 = time.time()
         try:
-            prompt = self._build_qa_prompt(question)
-            answer, _ = self._chat(image_path, prompt)
+            prompt = self._build_qa_prompt(question, text_only=text_only)
+            max_tokens = self._max_new_tokens(output_format, "qa")
+            answer, _ = self._chat(image_path, prompt, max_new_tokens=max_tokens)
             elapsed = int((time.time() - t0) * 1000)
             return QaResponse(
                 model_id=self.engine_id,
                 elapsed_ms=elapsed,
                 answer=answer,
+                output_format=output_format,
             )
         except Exception as exc:
             elapsed = int((time.time() - t0) * 1000)
@@ -466,6 +579,7 @@ class QwenVlmEngine(VlmEngine):
                 success=False,
                 model_id=self.engine_id,
                 elapsed_ms=elapsed,
+                output_format=output_format,
                 error=str(exc),
             )
 
@@ -650,3 +764,43 @@ class QwenVlmEngine(VlmEngine):
                 bbox = None
             items.append(SchemaExtractItem(key=f.key, value=value, bbox=bbox))
         return items
+
+    def _parse_schema_text_only(
+        self, raw: str, schema: list[SchemaField]
+    ) -> list[SchemaExtractItem]:
+        """Schema JSON 응답 → SchemaExtractItem (bbox 없음)."""
+        data = self._extract_json_array(raw)
+
+        result_map: dict[str, dict] = {}
+        for item in data:
+            if isinstance(item, dict) and "key" in item:
+                result_map[item["key"]] = item
+
+        items: list[SchemaExtractItem] = []
+        for f in schema:
+            entry = result_map.get(f.key, {})
+            value = self._entry_schema_value(entry) if entry else ""
+            if (
+                self._normalize_match_mode(f.match_mode) == "exact_text"
+                and value
+                and not self.is_valid_exact_match(f.key, value)
+            ):
+                logger.warning(
+                    "Schema exact_text 거부 key=%r value=%r (병합/번역 의심)",
+                    f.key,
+                    value,
+                )
+                value = ""
+            items.append(SchemaExtractItem(key=f.key, value=value))
+        return items
+
+    @staticmethod
+    def _parse_plain_ocr(raw: str) -> list[VlmOcrItem]:
+        """plain text OCR 응답 → VlmOcrItem 리스트 (bbox 없음)."""
+        text = QwenVlmEngine._strip_code_fences(raw.strip())
+        if not text:
+            return []
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        if not lines:
+            return [VlmOcrItem(text=text)]
+        return [VlmOcrItem(text=ln) for ln in lines]

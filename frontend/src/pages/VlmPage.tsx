@@ -20,6 +20,7 @@ import VlmModeSelector from "../components/vlm/VlmModeSelector";
 import VlmOcrPromptOptions, {
   DEFAULT_SPOTTING_PROMPT,
 } from "../components/vlm/VlmOcrPromptOptions";
+import VlmOutputFormatSelector from "../components/vlm/VlmOutputFormatSelector";
 import type {
   QaResponse,
   SchemaExtractResponse,
@@ -28,6 +29,7 @@ import type {
   VlmModelInfo,
   VlmOcrPromptMode,
   VlmOcrResponse,
+  VlmOutputFormat,
 } from "../types/vlm";
 
 type Status = "idle" | "ready" | "loading" | "running" | "done" | "error";
@@ -70,6 +72,7 @@ export default function VlmPage() {
   const [qaHistory, setQaHistory] = useState<QaEntry[]>([]);
   const [ocrPromptMode, setOcrPromptMode] = useState<VlmOcrPromptMode>("spotting");
   const [customPrompt, setCustomPrompt] = useState("");
+  const [outputFormat, setOutputFormat] = useState<VlmOutputFormat>("bbox");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -125,7 +128,10 @@ export default function VlmPage() {
           customPrompt:
             ocrPromptMode === "custom"
               ? customPrompt
-              : DEFAULT_SPOTTING_PROMPT,
+              : outputFormat === "bbox"
+                ? DEFAULT_SPOTTING_PROMPT
+                : undefined,
+          outputFormat,
         });
         setOcrResult(res);
         setCurrentLoaded(selectedModelId);
@@ -143,7 +149,9 @@ export default function VlmPage() {
           setStatusMsg("최소 1개의 Key를 입력하세요.");
           return;
         }
-        const res = await vlmExtract(file, selectedModelId, validSchema);
+        const res = await vlmExtract(file, selectedModelId, validSchema, {
+          outputFormat,
+        });
         setSchemaResult(res);
         setCurrentLoaded(selectedModelId);
         if (!res.success) {
@@ -165,7 +173,7 @@ export default function VlmPage() {
     setStatus("running");
     setStatusMsg("답변 생성 중...");
     try {
-      const res = await vlmAsk(file, selectedModelId, question);
+      const res = await vlmAsk(file, selectedModelId, question, { outputFormat });
       setCurrentLoaded(selectedModelId);
       setQaHistory((prev) => [...prev, { question, response: res }]);
       setStatus("done");
@@ -242,6 +250,14 @@ export default function VlmPage() {
             )}
           </div>
         </div>
+
+        <hr className="border-slate-100" />
+
+        <VlmOutputFormatSelector
+          outputFormat={outputFormat}
+          onChange={setOutputFormat}
+          disabled={status === "running"}
+        />
 
         {/* 모드별 옵션 */}
         {mode === "ocr" && (
