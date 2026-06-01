@@ -22,7 +22,7 @@ from app.schemas.vlm import (
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_TIMEOUT = httpx.Timeout(connect=30.0, read=600.0, write=120.0, pool=30.0)
+_DEFAULT_TIMEOUT = httpx.Timeout(connect=30.0, read=1800.0, write=120.0, pool=30.0)
 
 
 class RemoteVlmEngine(VlmEngine):

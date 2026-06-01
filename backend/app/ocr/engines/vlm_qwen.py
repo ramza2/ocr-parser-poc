@@ -139,7 +139,7 @@ class QwenVlmEngine(VlmEngine):
         with torch.no_grad():
             ids = self._model.generate(
                 **inputs,
-                max_new_tokens=4096,
+                max_new_tokens=2048,
                 do_sample=False,
             )
         trimmed = ids[:, inputs.input_ids.shape[1]:]
