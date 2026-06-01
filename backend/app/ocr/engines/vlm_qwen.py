@@ -127,7 +127,12 @@ class QwenVlmEngine(VlmEngine):
         return rw, rh
 
     def _chat(
-        self, image_path: str, prompt: str, max_new_tokens: int = 2048
+        self,
+        image_path: str,
+        prompt: str,
+        max_new_tokens: int = 2048,
+        *,
+        repetition_penalty: float | None = None,
     ) -> tuple[str, tuple[int, int]]:
         """이미지 + 프롬프트 → (텍스트 응답, processor 리사이즈 크기)."""
         import torch
@@ -156,12 +161,15 @@ class QwenVlmEngine(VlmEngine):
             return_tensors="pt",
         ).to(self._model.device)
 
+        gen_kwargs: dict = {
+            "max_new_tokens": max_new_tokens,
+            "do_sample": False,
+        }
+        if repetition_penalty is not None and repetition_penalty > 1.0:
+            gen_kwargs["repetition_penalty"] = repetition_penalty
+
         with torch.no_grad():
-            ids = self._model.generate(
-                **inputs,
-                max_new_tokens=max_new_tokens,
-                do_sample=False,
-            )
+            ids = self._model.generate(**inputs, **gen_kwargs)
         trimmed = ids[:, inputs.input_ids.shape[1]:]
         text = self._processor.batch_decode(
             trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
@@ -205,16 +213,25 @@ class QwenVlmEngine(VlmEngine):
         "* a document or mobile screen,\n"
         "* a signboard, road sign, direction board, label, poster, or product,\n"
         "* an outdoor or natural scene.\n\n"
-        "Pay special attention to Korean, English, Chinese characters, numbers, "
-        "and punctuation.\n\n"
-        "Return ONLY the recognized text, preserving line breaks as in the image.\n"
-        "Reading order: top to bottom, left to right.\n\n"
+        "Pay special attention to:\n\n"
+        "* Korean, English, Chinese characters, numbers, and punctuation,\n"
+        "* stylized, embossed, shadowed, engraved, painted, low-contrast, or "
+        "angled text,\n"
+        "* text on colored boards or textured backgrounds.\n\n"
+        "Before returning an empty result, carefully inspect the entire image "
+        "for any object or region containing readable characters.\n\n"
+        "Return ONLY a valid JSON array in reading order, from top to bottom "
+        "and left to right.\n\n"
+        "Use exactly this schema:\n"
+        '[{"text_content": "recognized text"}]\n\n'
         "Rules:\n\n"
-        "* Do not output JSON, coordinates, bbox, markdown, explanations, or "
-        "comments.\n"
-        "* Preserve text exactly as it appears.\n"
-        "* Return an empty response only when there are truly no visible "
-        "characters anywhere in the image."
+        "* Return one object per visible text line.\n"
+        "* Preserve text exactly as it appears in the image.\n"
+        "* Do not include bbox, coordinates, markdown, explanations, comments, "
+        "or additional keys.\n"
+        "* The JSON must be strict RFC 8259: no trailing commas.\n"
+        "* Return [] only when there are truly no visible characters or words "
+        "anywhere in the image."
     )
 
     _OUTPUT_FORMATS = frozenset({"bbox", "text_only"})
@@ -243,9 +260,15 @@ class QwenVlmEngine(VlmEngine):
     ) -> tuple[list[VlmOcrItem], str, str]:
         """VLM 1회 호출 → 파싱 (재시도 없음)."""
         max_tokens = self._max_new_tokens(output_format, "ocr")
-        raw, processed_size = self._chat(image_path, prompt, max_new_tokens=max_tokens)
+        rep_penalty = 1.08 if output_format == "text_only" else None
+        raw, processed_size = self._chat(
+            image_path,
+            prompt,
+            max_new_tokens=max_tokens,
+            repetition_penalty=rep_penalty,
+        )
         if output_format == "text_only":
-            items = self._parse_plain_ocr(raw)
+            items = self._parse_ocr_text_only(raw, processed_size, prompt_label=label)
         else:
             items = self._parse_ocr_with_bbox(raw, processed_size)
         logger.info(
@@ -279,7 +302,7 @@ class QwenVlmEngine(VlmEngine):
                 label = "custom"
             elif output_format == "text_only":
                 prompt = custom_prompt or self._PLAIN_OCR_PROMPT
-                label = "plain"
+                label = "text_only"
             else:
                 # spotting: UI가 보낸 프롬프트 우선 (워커·프론트 불일치 방지)
                 prompt = custom_prompt or self._SPOTTING_OCR_PROMPT
@@ -793,6 +816,47 @@ class QwenVlmEngine(VlmEngine):
                 value = ""
             items.append(SchemaExtractItem(key=f.key, value=value))
         return items
+
+    @staticmethod
+    def _is_degenerate_output(raw: str) -> bool:
+        """동일 문자 반복 등 비정상 생성 감지."""
+        text = raw.strip()
+        if len(text) < 12:
+            return False
+        chars = [c for c in text if not c.isspace()]
+        if not chars:
+            return True
+        from collections import Counter
+
+        _char, count = Counter(chars).most_common(1)[0]
+        return count / len(chars) > 0.75
+
+    def _parse_ocr_text_only(
+        self,
+        raw: str,
+        img_size: tuple[int, int] | None = None,
+        *,
+        prompt_label: str = "text_only",
+    ) -> list[VlmOcrItem]:
+        """text_only OCR — JSON(text_content) 우선, 실패 시 plain fallback."""
+        if self._is_degenerate_output(raw):
+            logger.warning(
+                "text_only OCR: 반복 문자열 감지 (label=%s), 결과 무시",
+                prompt_label,
+            )
+            return []
+
+        items = self._parse_ocr_with_bbox(raw, img_size)
+        if items:
+            return [VlmOcrItem(text=it.text) for it in items]
+
+        if prompt_label == "custom":
+            plain_items = self._parse_plain_ocr(raw)
+            if plain_items and not self._is_degenerate_output(
+                "\n".join(it.text for it in plain_items)
+            ):
+                return plain_items
+        return []
 
     @staticmethod
     def _parse_plain_ocr(raw: str) -> list[VlmOcrItem]:
