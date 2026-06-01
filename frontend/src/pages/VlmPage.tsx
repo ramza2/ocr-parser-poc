@@ -17,7 +17,9 @@ import SchemaEditor from "../components/vlm/SchemaEditor";
 import SchemaResultView from "../components/vlm/SchemaResultView";
 import VlmModelSelector from "../components/vlm/VlmModelSelector";
 import VlmModeSelector from "../components/vlm/VlmModeSelector";
-import VlmOcrPromptOptions from "../components/vlm/VlmOcrPromptOptions";
+import VlmOcrPromptOptions, {
+  DEFAULT_SPOTTING_PROMPT,
+} from "../components/vlm/VlmOcrPromptOptions";
 import type {
   QaResponse,
   SchemaExtractResponse,
@@ -120,7 +122,10 @@ export default function VlmPage() {
       if (mode === "ocr") {
         const res = await vlmOcr(file, selectedModelId, {
           promptMode: ocrPromptMode,
-          customPrompt: ocrPromptMode === "custom" ? customPrompt : undefined,
+          customPrompt:
+            ocrPromptMode === "custom"
+              ? customPrompt
+              : DEFAULT_SPOTTING_PROMPT,
         });
         setOcrResult(res);
         setCurrentLoaded(selectedModelId);

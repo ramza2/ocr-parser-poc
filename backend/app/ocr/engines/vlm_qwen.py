@@ -209,13 +209,13 @@ class QwenVlmEngine(VlmEngine):
             if prompt_mode == "custom":
                 if not custom_prompt:
                     raise ValueError("커스텀 프롬프트가 비어 있습니다.")
-                items, label, raw = self._run_single_vlm(
-                    image_path, custom_prompt, "custom"
-                )
+                prompt = custom_prompt
+                label = "custom"
             else:
-                items, label, raw = self._run_single_vlm(
-                    image_path, self._SPOTTING_OCR_PROMPT, "spotting"
-                )
+                # spotting: UI가 보낸 프롬프트 우선 (워커·프론트 불일치 방지)
+                prompt = custom_prompt or self._SPOTTING_OCR_PROMPT
+                label = "spotting"
+            items, label, raw = self._run_single_vlm(image_path, prompt, label)
 
             elapsed = int((time.time() - t0) * 1000)
             logger.info(

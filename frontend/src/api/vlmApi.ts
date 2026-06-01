@@ -45,8 +45,9 @@ export async function vlmOcr(
   form.append("file", file);
   form.append("model_id", modelId);
   form.append("ocr_prompt_mode", options?.promptMode ?? "spotting");
-  if (options?.customPrompt?.trim()) {
-    form.append("custom_prompt", options.customPrompt.trim());
+  const promptText = options?.customPrompt?.trim() ?? "";
+  if (promptText) {
+    form.append("custom_prompt", promptText);
   }
   const res = await fetch("/api/vlm/ocr", { method: "POST", body: form });
   return parseJsonResponse<VlmOcrResponse>(res, "VLM OCR");
