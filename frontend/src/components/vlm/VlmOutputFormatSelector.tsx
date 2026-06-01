@@ -4,12 +4,12 @@ const FORMATS: { id: VlmOutputFormat; label: string; desc: string }[] = [
   {
     id: "bbox",
     label: "bbox + JSON",
-    desc: "좌표 포함 (느림, 오버레이 가능)",
+    desc: "좌표 포함 전용 프롬프트",
   },
   {
     id: "text_only",
     label: "텍스트만",
-    desc: "좌표 제거 (OCR은 spotting과 동일 추론)",
+    desc: "줄 단위 텍스트 전용 프롬프트",
   },
 ];
 

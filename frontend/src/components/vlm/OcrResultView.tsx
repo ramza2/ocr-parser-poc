@@ -25,29 +25,50 @@ export default function OcrResultView({ result, imageUrl }: Props) {
         <span className="text-xs text-slate-500">
           {result.items.length}개 항목
         </span>
-        {result.prompt_mode && (
+        {result.prompt_label && (
           <span className="rounded bg-amber-50 px-2 py-0.5 text-xs text-amber-800">
-            {result.prompt_mode}
-            {result.prompt_label ? ` · ${result.prompt_label}` : ""}
+            {result.prompt_label}
           </span>
         )}
         {result.output_format && (
           <span className="rounded bg-violet-50 px-2 py-0.5 text-xs text-violet-800">
             {formatOutputFormatLabel(result.output_format)}
-            {result.output_format === "text_only" && result.prompt_label === "text_only"
-              ? " · spotting 추론"
-              : ""}
           </span>
         )}
       </div>
 
+      {result.output_format === "text_only" && result.prompt_label === "text_only→bbox_fallback" && (
+        <p className="text-[11px] text-amber-700 leading-snug">
+          텍스트 전용 프롬프트 실패 → bbox 프롬프트로 자동 fallback 되었습니다.
+        </p>
+      )}
+
+      {result.output_format === "text_only" && result.prompt_label === "text_only" && (
+        <p className="text-[11px] text-slate-500 leading-snug">
+          텍스트 전용 프롬프트로 추론했습니다 (bbox 없음).
+        </p>
+      )}
+
       {result.raw_response_preview && (
         <details className="rounded-lg border border-slate-200 bg-slate-50 text-xs">
           <summary className="cursor-pointer px-3 py-2 font-medium text-slate-600">
-            모델 원본 응답 (미리보기)
+            {result.output_format === "text_only"
+              ? "추출 텍스트 (미리보기)"
+              : "모델 원본 응답 (미리보기)"}
           </summary>
           <pre className="max-h-40 overflow-auto whitespace-pre-wrap border-t border-slate-200 p-3 text-slate-700">
             {result.raw_response_preview}
+          </pre>
+        </details>
+      )}
+
+      {result.output_format === "text_only" && result.model_raw_preview && (
+        <details className="rounded-lg border border-dashed border-slate-200 bg-white text-xs">
+          <summary className="cursor-pointer px-3 py-2 font-medium text-slate-500">
+            모델 raw 응답 (디버그)
+          </summary>
+          <pre className="max-h-40 overflow-auto whitespace-pre-wrap border-t border-slate-100 p-3 text-slate-600">
+            {result.model_raw_preview}
           </pre>
         </details>
       )}

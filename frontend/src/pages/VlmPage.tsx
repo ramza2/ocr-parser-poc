@@ -17,9 +17,6 @@ import SchemaEditor from "../components/vlm/SchemaEditor";
 import SchemaResultView from "../components/vlm/SchemaResultView";
 import VlmModelSelector from "../components/vlm/VlmModelSelector";
 import VlmModeSelector from "../components/vlm/VlmModeSelector";
-import VlmOcrPromptOptions, {
-  DEFAULT_SPOTTING_PROMPT,
-} from "../components/vlm/VlmOcrPromptOptions";
 import VlmOutputFormatSelector from "../components/vlm/VlmOutputFormatSelector";
 import type {
   QaResponse,
@@ -27,7 +24,6 @@ import type {
   SchemaField,
   VlmMode,
   VlmModelInfo,
-  VlmOcrPromptMode,
   VlmOcrResponse,
   VlmOutputFormat,
 } from "../types/vlm";
@@ -70,8 +66,6 @@ export default function VlmPage() {
   const [ocrResult, setOcrResult] = useState<VlmOcrResponse | null>(null);
   const [schemaResult, setSchemaResult] = useState<SchemaExtractResponse | null>(null);
   const [qaHistory, setQaHistory] = useState<QaEntry[]>([]);
-  const [ocrPromptMode, setOcrPromptMode] = useState<VlmOcrPromptMode>("spotting");
-  const [customPrompt, setCustomPrompt] = useState("");
   const [outputFormat, setOutputFormat] = useState<VlmOutputFormat>("bbox");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -113,8 +107,7 @@ export default function VlmPage() {
     !!file &&
     !!selectedModelId &&
     status !== "running" &&
-    status !== "loading" &&
-    (mode !== "ocr" || ocrPromptMode !== "custom" || customPrompt.trim().length > 0);
+    status !== "loading";
 
   const handleRun = async () => {
     if (!file || !selectedModelId) return;
@@ -123,14 +116,7 @@ export default function VlmPage() {
     setStatusMsg("모델 추론 중...");
     try {
       if (mode === "ocr") {
-        const res = await vlmOcr(file, selectedModelId, {
-          promptMode: ocrPromptMode,
-          customPrompt:
-            ocrPromptMode === "custom"
-              ? customPrompt
-              : DEFAULT_SPOTTING_PROMPT,
-          outputFormat,
-        });
+        const res = await vlmOcr(file, selectedModelId, { outputFormat });
         setOcrResult(res);
         setCurrentLoaded(selectedModelId);
         if (!res.success) {
@@ -258,19 +244,6 @@ export default function VlmPage() {
         />
 
         {/* 모드별 옵션 */}
-        {mode === "ocr" && (
-          <>
-            <hr className="border-slate-100" />
-            <VlmOcrPromptOptions
-              promptMode={ocrPromptMode}
-              customPrompt={customPrompt}
-              onPromptModeChange={setOcrPromptMode}
-              onCustomPromptChange={setCustomPrompt}
-              disabled={status === "running"}
-            />
-          </>
-        )}
-
         {mode === "schema" && (
           <>
             <hr className="border-slate-100" />

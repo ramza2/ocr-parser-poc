@@ -64,10 +64,6 @@ class RemoteVlmEngine(VlmEngine):
     def ocr(self, image_path: str, options: dict | None = None) -> VlmOcrResponse:
         opts = options or {}
         extra: dict[str, str] = {}
-        if opts.get("prompt_mode"):
-            extra["ocr_prompt_mode"] = str(opts["prompt_mode"])
-        if opts.get("custom_prompt"):
-            extra["custom_prompt"] = str(opts["custom_prompt"])
         if opts.get("output_format"):
             extra["output_format"] = str(opts["output_format"])
         return self._post_file(

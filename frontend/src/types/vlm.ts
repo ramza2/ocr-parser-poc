@@ -13,13 +13,9 @@ export interface VlmOcrItem {
   bbox?: BoundingBox | null;
 }
 
-export type VlmOcrPromptMode = "spotting" | "custom";
-
 export type VlmOutputFormat = "bbox" | "text_only";
 
 export interface VlmOcrOptions {
-  promptMode?: VlmOcrPromptMode;
-  customPrompt?: string;
   outputFormat?: VlmOutputFormat;
 }
 
@@ -38,6 +34,7 @@ export interface VlmOcrResponse {
   prompt_label?: string | null;
   output_format?: string | null;
   raw_response_preview?: string | null;
+  model_raw_preview?: string | null;
 }
 
 /** exact_text: key = 이미지에 있는 문자열 그대로 | 그 외: key = 결과 필드 ID */

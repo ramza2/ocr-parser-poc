@@ -257,8 +257,8 @@ class QwenVlmEngine(VlmEngine):
             )
         return text, processed_size
 
-    # Scene-text OCR + grounding (bbox_2d + text_content)
-    _SPOTTING_OCR_PROMPT = (
+    # bbox + JSON 전용 OCR 프롬프트
+    _BBOX_OCR_PROMPT = (
         "You are a scene-text OCR and text-grounding engine.\n\n"
         "Find and transcribe ALL visible text in this image, whether it appears in:\n\n"
         "* a document or mobile screen,\n"
@@ -288,7 +288,36 @@ class QwenVlmEngine(VlmEngine):
         "anywhere in the image."
     )
 
+    # 텍스트만 전용 OCR 프롬프트 (bbox 없음, 줄 단위 JSON)
+    _TEXT_ONLY_OCR_PROMPT = (
+        "You are a scene-text OCR transcription engine.\n\n"
+        "Find and transcribe ALL visible text in this image, whether it appears in:\n\n"
+        "* a document or mobile screen,\n"
+        "* a signboard, road sign, direction board, label, poster, or product,\n"
+        "* an outdoor or natural scene.\n\n"
+        "Pay special attention to Korean, English, Chinese characters, numbers, "
+        "and punctuation on colored boards, embossed, shadowed, or low-contrast text.\n\n"
+        "Return ONLY a valid JSON array in reading order (top to bottom, left to right).\n\n"
+        "Use exactly this schema:\n"
+        '[{"text_content": "recognized text line"}]\n\n'
+        "Rules:\n\n"
+        "* Return one object per logical text line as it appears on the sign or document.\n"
+        "* Keep each line intact — do NOT split a line into single characters or words.\n"
+        "* Example: a three-line sign with Korean, Hanja, and English should produce "
+        "exactly three JSON objects.\n"
+        "* Preserve text exactly as visible.\n"
+        "* Do not include bbox, coordinates, markdown, explanations, or additional keys.\n"
+        "* Output strict RFC 8259 JSON only, with no trailing commas.\n"
+        "* Return [] only when there are truly no visible characters anywhere."
+    )
+
     _OUTPUT_FORMATS = frozenset({"bbox", "text_only"})
+
+    @classmethod
+    def _ocr_prompt(cls, output_format: str) -> str:
+        if output_format == "text_only":
+            return cls._TEXT_ONLY_OCR_PROMPT
+        return cls._BBOX_OCR_PROMPT
 
     @classmethod
     def _normalize_output_format(cls, opts: dict | None) -> str:
@@ -306,56 +335,52 @@ class QwenVlmEngine(VlmEngine):
             return 1024
         return 1024
 
-    def _run_single_vlm(
+    def _run_ocr(
         self,
         image_path: str,
-        prompt: str,
-        label: str,
         output_format: str = "bbox",
     ) -> tuple[list[VlmOcrItem], str, str]:
-        """VLM 1회 호출 → 파싱 (text_only는 spotting JSON 후 bbox 제거)."""
-        if output_format != "text_only":
-            max_tokens = self._max_new_tokens(output_format, "ocr")
+        """output_format별 전용 프롬프트로 OCR 1회 실행."""
+        max_tokens = self._max_new_tokens(output_format, "ocr")
+
+        if output_format == "bbox":
+            prompt = self._BBOX_OCR_PROMPT
             raw, processed_size = self._chat(
                 image_path, prompt, max_new_tokens=max_tokens
             )
             items = self._parse_ocr_with_bbox(raw, processed_size)
             logger.info(
-                "%s: 항목 %d개, bbox %d개, format=%s, max_tokens=%d",
-                label,
+                "bbox OCR: 항목=%d bbox=%d max_tokens=%d",
                 len(items),
                 sum(1 for it in items if it.bbox),
-                output_format,
                 max_tokens,
             )
-            return items, label, raw
+            return items, "bbox", raw
 
-        # text_only: Qwen은 bbox grounding 없이 OCR JSON을 쓰면 퇴화(!) 발생.
-        # spotting( bbox JSON )으로 추론 후 좌표만 제거한다.
-        max_tokens = self._max_new_tokens("text_only", "ocr")
+        prompt = self._TEXT_ONLY_OCR_PROMPT
         raw, processed_size = self._chat(
             image_path, prompt, max_new_tokens=max_tokens
         )
         items = self._items_without_bbox(
             self._parse_ocr_with_bbox(raw, processed_size)
         )
+        label = "text_only"
 
-        if (not items or self._is_degenerate_output(raw)) and label == "custom":
-            logger.info("text_only custom OCR 실패 → spotting fallback")
-            fallback_prompt = self._SPOTTING_OCR_PROMPT
+        if not items or self._is_degenerate_output(raw):
+            logger.warning(
+                "text_only OCR 실패/퇴화 → bbox 프롬프트 fallback"
+            )
+            fallback_prompt = self._BBOX_OCR_PROMPT
             raw, processed_size = self._chat(
-                image_path, fallback_prompt, max_new_tokens=2048
+                image_path, fallback_prompt, max_new_tokens=max_tokens
             )
             items = self._items_without_bbox(
                 self._parse_ocr_with_bbox(raw, processed_size)
             )
-            label = "text_only→spotting"
+            label = "text_only→bbox_fallback"
 
         logger.info(
-            "%s: 항목 %d개, format=text_only, max_tokens=%d",
-            label,
-            len(items),
-            max_tokens,
+            "%s: 항목=%d max_tokens=%d", label, len(items), max_tokens
         )
         return items, label, raw
 
@@ -368,51 +393,35 @@ class QwenVlmEngine(VlmEngine):
     def ocr(self, image_path: str, options: dict | None = None) -> VlmOcrResponse:
         opts = options or {}
         output_format = self._normalize_output_format(opts)
-        raw_mode = str(opts.get("prompt_mode", "spotting")).strip().lower() or "spotting"
-        # 구 API 호환 (auto, bbox, plain → spotting)
-        prompt_mode = (
-            "custom" if raw_mode == "custom" else "spotting"
-        )
-        custom_prompt = str(opts.get("custom_prompt", "")).strip()
 
         t0 = time.time()
         try:
-            if prompt_mode == "custom":
-                if not custom_prompt:
-                    raise ValueError("커스텀 프롬프트가 비어 있습니다.")
-                prompt = custom_prompt
-                label = "custom"
-            elif output_format == "text_only":
-                # spotting과 동일 프롬프트 (bbox는 파싱 후 제거)
-                prompt = custom_prompt or self._SPOTTING_OCR_PROMPT
-                label = "custom" if prompt_mode == "custom" else "text_only"
-            else:
-                # spotting: UI가 보낸 프롬프트 우선 (워커·프론트 불일치 방지)
-                prompt = custom_prompt or self._SPOTTING_OCR_PROMPT
-                label = "spotting"
-            items, label, raw = self._run_single_vlm(
-                image_path, prompt, label, output_format=output_format
-            )
+            items, label, raw = self._run_ocr(image_path, output_format=output_format)
 
             elapsed = int((time.time() - t0) * 1000)
             logger.info(
-                "OCR 완료 mode=%s label=%s format=%s 항목=%d bbox=%d",
-                prompt_mode,
+                "OCR 완료 label=%s format=%s 항목=%d bbox=%d",
                 label,
                 output_format,
                 len(items),
                 sum(1 for it in items if it.bbox),
             )
             full_text = "\n".join(it.text for it in items)
+            if output_format == "text_only":
+                raw_preview = full_text[:2000] if full_text else None
+                model_raw = raw[:2000] if raw else None
+            else:
+                raw_preview = raw[:2000] if raw else None
+                model_raw = None
             return VlmOcrResponse(
                 model_id=self.engine_id,
                 elapsed_ms=elapsed,
                 items=items,
                 full_text=full_text,
-                prompt_mode=prompt_mode,
                 prompt_label=label,
                 output_format=output_format,
-                raw_response_preview=raw[:2000] if raw else None,
+                raw_response_preview=raw_preview,
+                model_raw_preview=model_raw,
             )
         except Exception as exc:
             elapsed = int((time.time() - t0) * 1000)
@@ -421,7 +430,6 @@ class QwenVlmEngine(VlmEngine):
                 success=False,
                 model_id=self.engine_id,
                 elapsed_ms=elapsed,
-                prompt_mode=prompt_mode,
                 output_format=output_format,
                 error=str(exc),
             )

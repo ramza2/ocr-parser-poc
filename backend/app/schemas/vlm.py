@@ -37,7 +37,8 @@ class VlmOcrResponse(BaseModel):
     prompt_mode: str | None = None  # spotting | custom
     prompt_label: str | None = None  # 실제 사용 단계 (spotting, custom 등)
     output_format: str | None = None  # bbox | text_only
-    raw_response_preview: str | None = None  # 모델 원본 응답 앞부분 (디버그)
+    raw_response_preview: str | None = None  # UI 미리보기 (text_only면 추출 텍스트)
+    model_raw_preview: str | None = None  # text_only 시 내부 spotting JSON (디버그)
 
 
 # ── Schema 추출 ───────────────────────────────────────
