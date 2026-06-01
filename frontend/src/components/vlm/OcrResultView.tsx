@@ -34,6 +34,9 @@ export default function OcrResultView({ result, imageUrl }: Props) {
         {result.output_format && (
           <span className="rounded bg-violet-50 px-2 py-0.5 text-xs text-violet-800">
             {formatOutputFormatLabel(result.output_format)}
+            {result.output_format === "text_only" && result.prompt_label === "text_only"
+              ? " · spotting 추론"
+              : ""}
           </span>
         )}
       </div>

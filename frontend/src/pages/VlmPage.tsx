@@ -128,9 +128,7 @@ export default function VlmPage() {
           customPrompt:
             ocrPromptMode === "custom"
               ? customPrompt
-              : outputFormat === "bbox"
-                ? DEFAULT_SPOTTING_PROMPT
-                : undefined,
+              : DEFAULT_SPOTTING_PROMPT,
           outputFormat,
         });
         setOcrResult(res);

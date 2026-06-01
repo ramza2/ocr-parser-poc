@@ -9,7 +9,7 @@ const FORMATS: { id: VlmOutputFormat; label: string; desc: string }[] = [
   {
     id: "text_only",
     label: "텍스트만",
-    desc: "좌표 없음 (빠름, 속도 비교용)",
+    desc: "좌표 제거 (OCR은 spotting과 동일 추론)",
   },
 ];
 

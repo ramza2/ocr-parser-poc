@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import time
+from pathlib import Path
 
 from app.ocr.engines.vlm_base import VlmEngine
 from app.schemas.vlm import (
@@ -24,8 +26,6 @@ from app.schemas.vlm import (
 )
 
 logger = logging.getLogger(__name__)
-
-import os
 
 _HF_MODEL_DEFAULT = "Qwen/Qwen2.5-VL-3B-Instruct"
 _HF_MODEL_LARGE = "Qwen/Qwen2.5-VL-7B-Instruct"
@@ -89,9 +89,10 @@ class QwenVlmEngine(VlmEngine):
 
         device_map = _pick_device_map(has_gpu)
         load_kwargs: dict = {
-            "torch_dtype": torch.float16 if has_gpu else torch.float32,
-            "device_map": device_map,
+            "torch_dtype": "auto",
         }
+        if has_gpu:
+            load_kwargs["device_map"] = device_map
 
         logger.info("Qwen2.5-VL 로드 시작: %s (device_map=%s)", hf_model, device_map)
         self._processor = AutoProcessor.from_pretrained(
@@ -126,6 +127,100 @@ class QwenVlmEngine(VlmEngine):
         )
         return rw, rh
 
+    @staticmethod
+    def _resolve_image_ref(image_path: str) -> str:
+        """Qwen process_vision_info 호환 file URI."""
+        path = Path(image_path).expanduser().resolve()
+        if not path.is_file():
+            raise FileNotFoundError(f"이미지 파일 없음: {image_path}")
+        return path.as_uri()
+
+    def _inference_device(self) -> str:
+        import torch
+
+        if torch.cuda.is_available():
+            return "cuda:0"
+        return "cpu"
+
+    def _prepare_vlm_inputs(self, image_path: str, prompt: str):
+        """이미지 + 프롬프트 → (processor inputs, 리사이즈 크기)."""
+        from qwen_vl_utils import process_vision_info
+
+        processed_size = self._get_processed_size(image_path)
+        image_ref = self._resolve_image_ref(image_path)
+
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": image_ref},
+                    {"type": "text", "text": prompt},
+                ],
+            }
+        ]
+        text_input = self._processor.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        image_inputs, video_inputs = process_vision_info(messages)
+        if not image_inputs:
+            raise RuntimeError(
+                f"비전 입력 로드 실패 (path={image_ref}). "
+                "워커 컨테이너에서 이미지 경로·qwen-vl-utils를 확인하세요."
+            )
+
+        inputs = self._processor(
+            text=[text_input],
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True,
+            return_tensors="pt",
+        )
+        device = self._inference_device()
+        inputs = inputs.to(device)
+        if getattr(inputs, "pixel_values", None) is None:
+            raise RuntimeError(
+                "pixel_values가 생성되지 않았습니다. "
+                "transformers/qwen-vl-utils 버전 또는 이미지 입력을 확인하세요."
+            )
+        logger.debug(
+            "VLM 입력 준비: device=%s pixel_values=%s",
+            device,
+            tuple(inputs.pixel_values.shape),
+        )
+        return inputs, processed_size
+
+    def _generate_from_inputs(
+        self,
+        inputs,
+        *,
+        max_new_tokens: int,
+        do_sample: bool = False,
+        temperature: float | None = None,
+        repetition_penalty: float = 1.05,
+    ) -> str:
+        import torch
+
+        gen_kwargs: dict = {
+            "max_new_tokens": max_new_tokens,
+            "do_sample": do_sample,
+            "repetition_penalty": repetition_penalty,
+        }
+        if do_sample and temperature is not None:
+            gen_kwargs["temperature"] = temperature
+        tokenizer = getattr(self._processor, "tokenizer", None)
+        if tokenizer is not None:
+            if tokenizer.pad_token_id is not None:
+                gen_kwargs["pad_token_id"] = tokenizer.pad_token_id
+            if tokenizer.eos_token_id is not None:
+                gen_kwargs["eos_token_id"] = tokenizer.eos_token_id
+
+        with torch.no_grad():
+            ids = self._model.generate(**inputs, **gen_kwargs)
+        trimmed = ids[:, inputs.input_ids.shape[1]:]
+        return self._processor.batch_decode(
+            trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+        )[0]
+
     def _chat(
         self,
         image_path: str,
@@ -135,45 +230,31 @@ class QwenVlmEngine(VlmEngine):
         repetition_penalty: float | None = None,
     ) -> tuple[str, tuple[int, int]]:
         """이미지 + 프롬프트 → (텍스트 응답, processor 리사이즈 크기)."""
-        import torch
-        from qwen_vl_utils import process_vision_info
+        inputs, processed_size = self._prepare_vlm_inputs(image_path, prompt)
+        rep = repetition_penalty if repetition_penalty is not None else 1.05
 
-        processed_size = self._get_processed_size(image_path)
-
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image", "image": image_path},
-                    {"type": "text", "text": prompt},
-                ],
-            }
-        ]
-        text_input = self._processor.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
+        text = self._generate_from_inputs(
+            inputs,
+            max_new_tokens=max_new_tokens,
+            repetition_penalty=rep,
         )
-        image_inputs, video_inputs = process_vision_info(messages)
-        inputs = self._processor(
-            text=[text_input],
-            images=image_inputs,
-            videos=video_inputs,
-            padding=True,
-            return_tensors="pt",
-        ).to(self._model.device)
-
-        gen_kwargs: dict = {
-            "max_new_tokens": max_new_tokens,
-            "do_sample": False,
-        }
-        if repetition_penalty is not None and repetition_penalty > 1.0:
-            gen_kwargs["repetition_penalty"] = repetition_penalty
-
-        with torch.no_grad():
-            ids = self._model.generate(**inputs, **gen_kwargs)
-        trimmed = ids[:, inputs.input_ids.shape[1]:]
-        text = self._processor.batch_decode(
-            trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-        )[0]
+        if self._is_degenerate_output(text):
+            logger.warning(
+                "VLM 퇴화 출력 감지(! 반복 등) → 샘플링 재시도 (max_tokens=%d)",
+                max_new_tokens,
+            )
+            text = self._generate_from_inputs(
+                inputs,
+                max_new_tokens=max_new_tokens,
+                do_sample=True,
+                temperature=0.2,
+                repetition_penalty=max(rep, 1.12),
+            )
+        if self._is_degenerate_output(text):
+            raise RuntimeError(
+                "모델이 비정상 출력(같은 문자 반복)을 생성했습니다. "
+                "vlm-worker 재시작, transformers 버전(4.49~4.51), GPU 상태를 확인하세요."
+            )
         return text, processed_size
 
     # Scene-text OCR + grounding (bbox_2d + text_content)
@@ -207,33 +288,6 @@ class QwenVlmEngine(VlmEngine):
         "anywhere in the image."
     )
 
-    _PLAIN_OCR_PROMPT = (
-        "You are a scene-text OCR engine.\n\n"
-        "Find and transcribe ALL visible text in this image, whether it appears in:\n\n"
-        "* a document or mobile screen,\n"
-        "* a signboard, road sign, direction board, label, poster, or product,\n"
-        "* an outdoor or natural scene.\n\n"
-        "Pay special attention to:\n\n"
-        "* Korean, English, Chinese characters, numbers, and punctuation,\n"
-        "* stylized, embossed, shadowed, engraved, painted, low-contrast, or "
-        "angled text,\n"
-        "* text on colored boards or textured backgrounds.\n\n"
-        "Before returning an empty result, carefully inspect the entire image "
-        "for any object or region containing readable characters.\n\n"
-        "Return ONLY a valid JSON array in reading order, from top to bottom "
-        "and left to right.\n\n"
-        "Use exactly this schema:\n"
-        '[{"text_content": "recognized text"}]\n\n'
-        "Rules:\n\n"
-        "* Return one object per visible text line.\n"
-        "* Preserve text exactly as it appears in the image.\n"
-        "* Do not include bbox, coordinates, markdown, explanations, comments, "
-        "or additional keys.\n"
-        "* The JSON must be strict RFC 8259: no trailing commas.\n"
-        "* Return [] only when there are truly no visible characters or words "
-        "anywhere in the image."
-    )
-
     _OUTPUT_FORMATS = frozenset({"bbox", "text_only"})
 
     @classmethod
@@ -248,8 +302,9 @@ class QwenVlmEngine(VlmEngine):
                 return 256
             if task == "schema":
                 return 512
-            return 512
-        return 2048
+            # OCR text_only: spotting JSON과 동일 (bbox grounding 필요)
+            return 1024
+        return 1024
 
     def _run_single_vlm(
         self,
@@ -258,28 +313,55 @@ class QwenVlmEngine(VlmEngine):
         label: str,
         output_format: str = "bbox",
     ) -> tuple[list[VlmOcrItem], str, str]:
-        """VLM 1회 호출 → 파싱 (재시도 없음)."""
-        max_tokens = self._max_new_tokens(output_format, "ocr")
-        rep_penalty = 1.08 if output_format == "text_only" else None
-        raw, processed_size = self._chat(
-            image_path,
-            prompt,
-            max_new_tokens=max_tokens,
-            repetition_penalty=rep_penalty,
-        )
-        if output_format == "text_only":
-            items = self._parse_ocr_text_only(raw, processed_size, prompt_label=label)
-        else:
+        """VLM 1회 호출 → 파싱 (text_only는 spotting JSON 후 bbox 제거)."""
+        if output_format != "text_only":
+            max_tokens = self._max_new_tokens(output_format, "ocr")
+            raw, processed_size = self._chat(
+                image_path, prompt, max_new_tokens=max_tokens
+            )
             items = self._parse_ocr_with_bbox(raw, processed_size)
+            logger.info(
+                "%s: 항목 %d개, bbox %d개, format=%s, max_tokens=%d",
+                label,
+                len(items),
+                sum(1 for it in items if it.bbox),
+                output_format,
+                max_tokens,
+            )
+            return items, label, raw
+
+        # text_only: Qwen은 bbox grounding 없이 OCR JSON을 쓰면 퇴화(!) 발생.
+        # spotting( bbox JSON )으로 추론 후 좌표만 제거한다.
+        max_tokens = self._max_new_tokens("text_only", "ocr")
+        raw, processed_size = self._chat(
+            image_path, prompt, max_new_tokens=max_tokens
+        )
+        items = self._items_without_bbox(
+            self._parse_ocr_with_bbox(raw, processed_size)
+        )
+
+        if (not items or self._is_degenerate_output(raw)) and label == "custom":
+            logger.info("text_only custom OCR 실패 → spotting fallback")
+            fallback_prompt = self._SPOTTING_OCR_PROMPT
+            raw, processed_size = self._chat(
+                image_path, fallback_prompt, max_new_tokens=2048
+            )
+            items = self._items_without_bbox(
+                self._parse_ocr_with_bbox(raw, processed_size)
+            )
+            label = "text_only→spotting"
+
         logger.info(
-            "%s: 항목 %d개, bbox %d개, format=%s, max_tokens=%d",
+            "%s: 항목 %d개, format=text_only, max_tokens=%d",
             label,
             len(items),
-            sum(1 for it in items if it.bbox),
-            output_format,
             max_tokens,
         )
         return items, label, raw
+
+    @staticmethod
+    def _items_without_bbox(items: list[VlmOcrItem]) -> list[VlmOcrItem]:
+        return [VlmOcrItem(text=it.text, confidence=it.confidence) for it in items]
 
     # ── VLM 메서드 ────────────────────────────────────
 
@@ -301,8 +383,9 @@ class QwenVlmEngine(VlmEngine):
                 prompt = custom_prompt
                 label = "custom"
             elif output_format == "text_only":
-                prompt = custom_prompt or self._PLAIN_OCR_PROMPT
-                label = "text_only"
+                # spotting과 동일 프롬프트 (bbox는 파싱 후 제거)
+                prompt = custom_prompt or self._SPOTTING_OCR_PROMPT
+                label = "custom" if prompt_mode == "custom" else "text_only"
             else:
                 # spotting: UI가 보낸 프롬프트 우선 (워커·프론트 불일치 방지)
                 prompt = custom_prompt or self._SPOTTING_OCR_PROMPT
@@ -830,41 +913,3 @@ class QwenVlmEngine(VlmEngine):
 
         _char, count = Counter(chars).most_common(1)[0]
         return count / len(chars) > 0.75
-
-    def _parse_ocr_text_only(
-        self,
-        raw: str,
-        img_size: tuple[int, int] | None = None,
-        *,
-        prompt_label: str = "text_only",
-    ) -> list[VlmOcrItem]:
-        """text_only OCR — JSON(text_content) 우선, 실패 시 plain fallback."""
-        if self._is_degenerate_output(raw):
-            logger.warning(
-                "text_only OCR: 반복 문자열 감지 (label=%s), 결과 무시",
-                prompt_label,
-            )
-            return []
-
-        items = self._parse_ocr_with_bbox(raw, img_size)
-        if items:
-            return [VlmOcrItem(text=it.text) for it in items]
-
-        if prompt_label == "custom":
-            plain_items = self._parse_plain_ocr(raw)
-            if plain_items and not self._is_degenerate_output(
-                "\n".join(it.text for it in plain_items)
-            ):
-                return plain_items
-        return []
-
-    @staticmethod
-    def _parse_plain_ocr(raw: str) -> list[VlmOcrItem]:
-        """plain text OCR 응답 → VlmOcrItem 리스트 (bbox 없음)."""
-        text = QwenVlmEngine._strip_code_fences(raw.strip())
-        if not text:
-            return []
-        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-        if not lines:
-            return [VlmOcrItem(text=text)]
-        return [VlmOcrItem(text=ln) for ln in lines]
