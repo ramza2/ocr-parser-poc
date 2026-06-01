@@ -146,7 +146,19 @@ GPU가 없는 Ubuntu 서버에서는 OCR/API만 두고, VLM은 GPU PC에서 **�
 | **GPU PC** | VLM 추론 전용 (`/api/vlm/*`) | `docker-compose.vlm-worker.yml` → `:8001` |
 | **Ubuntu 서버** | OCR·API·프론트, VLM은 원격 프록시 | `docker-compose.yml` + `VLM_WORKER_URL` |
 
-**1) GPU PC (개발 PC) — VLM 워커**
+**1) GPU 서버 (Ubuntu) — 사전 점검·설치**
+
+프로젝트 루트에서 (SSH 접속 후):
+
+```bash
+chmod +x scripts/setup-gpu-ubuntu.sh
+./scripts/setup-gpu-ubuntu.sh check              # 드라이버·Docker·GPU 컨테이너 점검
+sudo ./scripts/setup-gpu-ubuntu.sh install-toolkit  # Toolkit 없을 때만
+./scripts/setup-gpu-ubuntu.sh verify-docker      # docker --gpus all 테스트
+./scripts/setup-gpu-ubuntu.sh vlm-worker         # VLM 워커 빌드·기동
+```
+
+**1) GPU PC / GPU 서버 — VLM 워커**
 
 ```bash
 # NVIDIA Container Toolkit 설치 후
