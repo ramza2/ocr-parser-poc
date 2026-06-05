@@ -1,0 +1,48 @@
+# Traefik 리버스 프록시 연동 (GPU 서버 / 프로덕션)
+#
+# 사전 요구:
+#   - traefik_proxy 외부 네트워크 존재: docker network create traefik_proxy
+#   - Traefik에 web / websecure entrypoint, letsencrypt certresolver 설정
+#   - DNS: ocr.openlink.kr → GPU 서버 공인 IP
+#
+# 실행 (기본 compose + 이 파일):
+#   docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d --build
+#
+# vlm-worker는 별도 (Traefik 노출 불필요):
+#   docker compose -f docker-compose.vlm-worker.yml up -d --build
+#
+# 주의: 호스트 포트 8080/8000 바인딩은 이 override에서 제거됩니다.
+#       Traefik(443)으로만 접속합니다.
+
+services:
+  backend:
+    ports: !reset []
+    networks:
+      - ocr_internal
+
+  frontend:
+    ports: !reset []
+    expose:
+      - "80"
+    networks:
+      - ocr_internal
+      - traefik_proxy
+    labels:
+      - "traefik.enable=true"
+      # HTTP → HTTPS 리다이렉트
+      - "traefik.http.routers.ocr-http.rule=Host(`ocr.openlink.kr`)"
+      - "traefik.http.routers.ocr-http.entrypoints=web"
+      - "traefik.http.routers.ocr-http.middlewares=ocr-https-redirect"
+      - "traefik.http.middlewares.ocr-https-redirect.redirectscheme.scheme=https"
+      # HTTPS
+      - "traefik.http.routers.ocr-https.rule=Host(`ocr.openlink.kr`)"
+      - "traefik.http.routers.ocr-https.entrypoints=websecure"
+      - "traefik.http.routers.ocr-https.tls=true"
+      - "traefik.http.routers.ocr-https.tls.certresolver=letsencrypt"
+      - "traefik.http.services.ocr-service.loadbalancer.server.port=80"
+
+networks:
+  ocr_internal:
+    driver: bridge
+  traefik_proxy:
+    external: true
