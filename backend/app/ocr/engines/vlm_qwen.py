@@ -61,6 +61,8 @@ QWEN_VL_VARIANTS: tuple[QwenVlVariant, ...] = (
 
 _THINKING_START_TAG = "<" + "redacted_thinking>"
 _THINKING_END_TAG = "</" + "redacted_thinking>"
+# Qwen3 Thinking 모델 공식 종료 토큰 ID (batch_decode 시 태그가 strip 되므로 토큰으로 분리)
+_THINKING_END_TOKEN_ID = 151668
 
 # processor·smart_resize 공통 (UI 스크린샷·문서용 해상도 상향)
 _MIN_PIXELS = 256 * 28 * 28
@@ -229,6 +231,69 @@ class QwenVlmEngine(VlmEngine):
         )
         return inputs, processed_size
 
+    def _thinking_end_token_id(self) -> int:
+        tokenizer = getattr(self._processor, "tokenizer", None)
+        if tokenizer is not None:
+            try:
+                ids = tokenizer.encode(_THINKING_END_TAG, add_special_tokens=False)
+                if len(ids) == 1:
+                    return ids[0]
+            except Exception:
+                pass
+        return _THINKING_END_TOKEN_ID
+
+    def _decode_generated(
+        self, input_ids, generated_ids, *, split_thinking: bool = False
+    ) -> str:
+        """생성 토큰 디코드. Thinking 모델은 종료 토큰 기준으로 최종 답만 반환."""
+        trimmed = generated_ids[:, input_ids.shape[1]:]
+        if not split_thinking:
+            return self._processor.batch_decode(
+                trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+            )[0]
+
+        new_ids = trimmed[0].tolist()
+        end_id = self._thinking_end_token_id()
+        try:
+            split_at = len(new_ids) - new_ids[::-1].index(end_id)
+        except ValueError:
+            split_at = 0
+
+        thinking_ids = new_ids[:split_at]
+        answer_ids = new_ids[split_at:]
+        if thinking_ids:
+            thinking = self._processor.batch_decode(
+                [thinking_ids],
+                skip_special_tokens=True,
+                clean_up_tokenization_spaces=False,
+            )[0].strip()
+            if thinking:
+                logger.debug("Thinking trace (%d chars)", len(thinking))
+
+        if answer_ids:
+            return self._processor.batch_decode(
+                [answer_ids],
+                skip_special_tokens=True,
+                clean_up_tokenization_spaces=False,
+            )[0].strip()
+
+        # 종료 토큰 없음 → 추론만 생성됐거나 max_tokens 부족
+        if new_ids:
+            logger.warning(
+                "Thinking 모델: %s 토큰 없음 — max_new_tokens 부족 가능",
+                _THINKING_END_TAG,
+            )
+            fallback = self._processor.batch_decode(
+                [new_ids],
+                skip_special_tokens=True,
+                clean_up_tokenization_spaces=False,
+            )[0].strip()
+            thinking, answer = self._split_thinking_output(
+                fallback, thinking_model=True
+            )
+            return answer or thinking
+        return ""
+
     def _generate_from_inputs(
         self,
         inputs,
@@ -237,6 +302,7 @@ class QwenVlmEngine(VlmEngine):
         do_sample: bool = False,
         temperature: float | None = None,
         repetition_penalty: float = 1.05,
+        split_thinking: bool = False,
     ) -> str:
         import torch
 
@@ -256,10 +322,9 @@ class QwenVlmEngine(VlmEngine):
 
         with torch.no_grad():
             ids = self._model.generate(**inputs, **gen_kwargs)
-        trimmed = ids[:, inputs.input_ids.shape[1]:]
-        return self._processor.batch_decode(
-            trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-        )[0]
+        return self._decode_generated(
+            inputs.input_ids, ids, split_thinking=split_thinking
+        )
 
     @staticmethod
     def _split_thinking_output(text: str, *, thinking_model: bool) -> tuple[str, str]:
@@ -308,8 +373,8 @@ class QwenVlmEngine(VlmEngine):
                 do_sample=True,
                 temperature=0.6,
                 repetition_penalty=rep,
+                split_thinking=True,
             )
-            text = self._finalize_model_output(text)
         else:
             text = self._generate_from_inputs(
                 inputs,
@@ -694,11 +759,12 @@ class QwenVlmEngine(VlmEngine):
                 error=str(exc),
             )
 
-    @staticmethod
-    def _build_qa_prompt(question: str, *, text_only: bool = False) -> str:
+    def _build_qa_prompt(
+        self, question: str, *, text_only: bool = False
+    ) -> str:
         """범용 이미지 Q&A 프롬프트 (표·계산형 질문 강화)."""
         q = question.strip()
-        return (
+        prompt = (
             "You are a visual question-answering assistant for images containing "
             "text, signs, documents, screens, objects, and natural scenes.\n\n"
             "Answer the user's question using only:\n\n"
@@ -762,6 +828,16 @@ class QwenVlmEngine(VlmEngine):
             "* Do not include JSON, coordinates, bbox, or markdown.\n\n"
             f"User question:\n{q}"
         )
+        if self._thinking:
+            prompt += (
+                "\n\n[Thinking Policy]\n\n"
+                "* Keep internal reasoning brief.\n"
+                "* Use the same language as the user's question for reasoning "
+                "and for the final answer.\n"
+                "* The user sees only the final answer; do not repeat the full "
+                "reasoning there.\n"
+            )
+        return prompt
 
     def ask(
         self, image_path: str, question: str, options: dict | None = None
