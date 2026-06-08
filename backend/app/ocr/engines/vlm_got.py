@@ -50,13 +50,20 @@ class GotOcrEngine(VlmEngine):
         from transformers import AutoModelForImageTextToText, AutoProcessor
 
         self._device = "cuda" if torch.cuda.is_available() else "cpu"
-        dtype = torch.float16 if self._device == "cuda" else torch.float32
+        if self._device == "cuda":
+            dtype = (
+                torch.bfloat16
+                if torch.cuda.is_bf16_supported()
+                else torch.float16
+            )
+        else:
+            dtype = torch.float32
 
-        logger.info("GOT-OCR2.0 로드 시작: %s (FP16=%s)", _HF_MODEL, self._device == "cuda")
+        logger.info("GOT-OCR2.0 로드 시작: %s (dtype=%s)", _HF_MODEL, dtype)
         self._processor = AutoProcessor.from_pretrained(_HF_MODEL)
         self._model = AutoModelForImageTextToText.from_pretrained(
             _HF_MODEL,
-            dtype=dtype,
+            torch_dtype=dtype,
             device_map=self._device,
         )
         self._model.eval()
