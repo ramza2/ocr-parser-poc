@@ -28,6 +28,9 @@ import type {
   VlmOutputFormat,
 } from "../types/vlm";
 
+/** OCR은 항상 text_only. Schema/Q&A만 출력 형식 선택 가능 */
+const OCR_OUTPUT_FORMAT: VlmOutputFormat = "text_only";
+
 type Status = "idle" | "ready" | "loading" | "running" | "done" | "error";
 
 const SUPPORTED = ["jpg", "jpeg", "png", "tif", "tiff", "bmp", "webp"];
@@ -66,7 +69,7 @@ export default function VlmPage() {
   const [ocrResult, setOcrResult] = useState<VlmOcrResponse | null>(null);
   const [schemaResult, setSchemaResult] = useState<SchemaExtractResponse | null>(null);
   const [qaHistory, setQaHistory] = useState<QaEntry[]>([]);
-  const [outputFormat, setOutputFormat] = useState<VlmOutputFormat>("bbox");
+  const [outputFormat, setOutputFormat] = useState<VlmOutputFormat>("text_only");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -116,7 +119,9 @@ export default function VlmPage() {
     setStatusMsg("모델 추론 중...");
     try {
       if (mode === "ocr") {
-        const res = await vlmOcr(file, selectedModelId, { outputFormat });
+        const res = await vlmOcr(file, selectedModelId, {
+          outputFormat: OCR_OUTPUT_FORMAT,
+        });
         setOcrResult(res);
         setCurrentLoaded(selectedModelId);
         if (!res.success) {
@@ -237,11 +242,17 @@ export default function VlmPage() {
 
         <hr className="border-slate-100" />
 
-        <VlmOutputFormatSelector
-          outputFormat={outputFormat}
-          onChange={setOutputFormat}
-          disabled={status === "running"}
-        />
+        {mode !== "ocr" && (
+          <>
+            <VlmOutputFormatSelector
+              outputFormat={outputFormat}
+              onChange={setOutputFormat}
+              disabled={status === "running"}
+              hideBbox
+            />
+            <hr className="border-slate-100" />
+          </>
+        )}
 
         {/* 모드별 옵션 */}
         {mode === "schema" && (

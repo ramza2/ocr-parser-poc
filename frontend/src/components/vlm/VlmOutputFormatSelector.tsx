@@ -4,12 +4,12 @@ const FORMATS: { id: VlmOutputFormat; label: string; desc: string }[] = [
   {
     id: "bbox",
     label: "bbox + JSON",
-    desc: "좌표 포함 전용 프롬프트",
+    desc: "좌표 포함 (Schema용)",
   },
   {
     id: "text_only",
     label: "텍스트만",
-    desc: "줄 단위 텍스트 전용 프롬프트",
+    desc: "좌표 없음",
   },
 ];
 
@@ -17,18 +17,22 @@ interface Props {
   outputFormat: VlmOutputFormat;
   onChange: (format: VlmOutputFormat) => void;
   disabled?: boolean;
+  /** true면 bbox 옵션 숨김 (Schema/Q&A) */
+  hideBbox?: boolean;
 }
 
 export default function VlmOutputFormatSelector({
   outputFormat,
   onChange,
   disabled,
+  hideBbox,
 }: Props) {
+  const formats = hideBbox ? FORMATS.filter((f) => f.id !== "bbox") : FORMATS;
   return (
     <div className="space-y-2">
       <h3 className="text-sm font-semibold text-slate-700">출력 형식</h3>
-      <div className="grid grid-cols-2 gap-1.5">
-        {FORMATS.map((f) => (
+      <div className={`grid gap-1.5 ${formats.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+        {formats.map((f) => (
           <button
             key={f.id}
             type="button"

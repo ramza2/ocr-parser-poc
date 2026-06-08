@@ -288,27 +288,26 @@ class QwenVlmEngine(VlmEngine):
         "anywhere in the image."
     )
 
-    # 텍스트만 전용 OCR 프롬프트 (bbox 없음, 줄 단위 JSON)
+    # 텍스트만 OCR — 가독성 있는 plain text (표·열 구조 유지)
     _TEXT_ONLY_OCR_PROMPT = (
-        "You are a scene-text OCR transcription engine.\n\n"
-        "Find and transcribe ALL visible text in this image, whether it appears in:\n\n"
-        "* a document or mobile screen,\n"
-        "* a signboard, road sign, direction board, label, poster, or product,\n"
-        "* an outdoor or natural scene.\n\n"
-        "Pay special attention to Korean, English, Chinese characters, numbers, "
-        "and punctuation on colored boards, embossed, shadowed, or low-contrast text.\n\n"
-        "Return ONLY a valid JSON array in reading order (top to bottom, left to right).\n\n"
-        "Use exactly this schema:\n"
-        '[{"text_content": "recognized text line"}]\n\n'
-        "Rules:\n\n"
-        "* Return one object per logical text line as it appears on the sign or document.\n"
-        "* Keep each line intact — do NOT split a line into single characters or words.\n"
-        "* Example: a three-line sign with Korean, Hanja, and English should produce "
-        "exactly three JSON objects.\n"
-        "* Preserve text exactly as visible.\n"
-        "* Do not include bbox, coordinates, markdown, explanations, or additional keys.\n"
-        "* Output strict RFC 8259 JSON only, with no trailing commas.\n"
-        "* Return [] only when there are truly no visible characters anywhere."
+        "You are a document and scene-text OCR assistant.\n\n"
+        "Transcribe ALL visible text from this image as readable plain text.\n"
+        "Preserve the visual layout: tables, columns, headings, and line groupings.\n\n"
+        "[Layout rules]\n\n"
+        "* Use line breaks and spacing so a human can read the result like the original.\n"
+        "* For tables: put column headers on one row; align each data row with its columns.\n"
+        "* Merge hierarchical row labels into one line when appropriate "
+        '(e.g. "일반권 / 개인 Private").\n'
+        "* For bilingual headers (어른 Adult), keep both languages as shown.\n"
+        "* In table body cells, when Korean and English repeat the same value "
+        "(e.g. 3,000원 with 3,000won directly below), include only the Korean "
+        "amount in the table. Do not duplicate identical translations.\n"
+        "* For multi-language titles, list each language line as in the image.\n"
+        "* Do not split one logical table row into many separate single-word lines.\n\n"
+        "[Output rules]\n\n"
+        "* Return plain text only.\n"
+        "* Do not output JSON, coordinates, bbox, markdown code fences, or explanations.\n"
+        "* Preserve text exactly as visible in the image."
     )
 
     _OUTPUT_FORMATS = frozenset({"bbox", "text_only"})
@@ -321,8 +320,8 @@ class QwenVlmEngine(VlmEngine):
 
     @classmethod
     def _normalize_output_format(cls, opts: dict | None) -> str:
-        fmt = str((opts or {}).get("output_format", "bbox")).strip().lower()
-        return fmt if fmt in cls._OUTPUT_FORMATS else "bbox"
+        fmt = str((opts or {}).get("output_format", "text_only")).strip().lower()
+        return fmt if fmt in cls._OUTPUT_FORMATS else "text_only"
 
     @classmethod
     def _max_new_tokens(cls, output_format: str, task: str) -> int:
@@ -361,15 +360,21 @@ class QwenVlmEngine(VlmEngine):
         raw, processed_size = self._chat(
             image_path, prompt, max_new_tokens=max_tokens
         )
-        items = self._items_without_bbox(
-            self._parse_ocr_with_bbox(raw, processed_size)
-        )
         label = "text_only"
 
-        if not items or self._is_degenerate_output(raw):
-            logger.warning(
-                "text_only OCR 실패/퇴화 → bbox 프롬프트 fallback"
+        if self._is_degenerate_output(raw):
+            logger.warning("text_only OCR 퇴화 → 샘플링 재시도")
+            inputs, processed_size = self._prepare_vlm_inputs(image_path, prompt)
+            raw = self._generate_from_inputs(
+                inputs,
+                max_new_tokens=max_tokens,
+                do_sample=True,
+                temperature=0.2,
+                repetition_penalty=1.12,
             )
+
+        if self._is_degenerate_output(raw):
+            logger.warning("text_only OCR 실패 → bbox 프롬프트 fallback")
             fallback_prompt = self._BBOX_OCR_PROMPT
             raw, processed_size = self._chat(
                 image_path, fallback_prompt, max_new_tokens=max_tokens
@@ -378,9 +383,15 @@ class QwenVlmEngine(VlmEngine):
                 self._parse_ocr_with_bbox(raw, processed_size)
             )
             label = "text_only→bbox_fallback"
+            logger.info(
+                "%s: 항목=%d max_tokens=%d", label, len(items), max_tokens
+            )
+            return items, label, raw
 
+        full_text = self._strip_code_fences(raw.strip())
+        items = [VlmOcrItem(text=full_text)] if full_text else []
         logger.info(
-            "%s: 항목=%d max_tokens=%d", label, len(items), max_tokens
+            "%s: chars=%d max_tokens=%d", label, len(full_text), max_tokens
         )
         return items, label, raw
 
@@ -406,13 +417,11 @@ class QwenVlmEngine(VlmEngine):
                 len(items),
                 sum(1 for it in items if it.bbox),
             )
-            full_text = "\n".join(it.text for it in items)
-            if output_format == "text_only":
-                raw_preview = full_text[:2000] if full_text else None
-                model_raw = raw[:2000] if raw else None
+            if output_format == "text_only" and label == "text_only":
+                full_text = self._strip_code_fences(raw.strip())
             else:
-                raw_preview = raw[:2000] if raw else None
-                model_raw = None
+                full_text = "\n".join(it.text for it in items)
+            raw_preview = raw[:4000] if raw else None
             return VlmOcrResponse(
                 model_id=self.engine_id,
                 elapsed_ms=elapsed,
@@ -421,7 +430,6 @@ class QwenVlmEngine(VlmEngine):
                 prompt_label=label,
                 output_format=output_format,
                 raw_response_preview=raw_preview,
-                model_raw_preview=model_raw,
             )
         except Exception as exc:
             elapsed = int((time.time() - t0) * 1000)

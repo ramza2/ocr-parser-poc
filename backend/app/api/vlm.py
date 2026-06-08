@@ -109,7 +109,7 @@ async def vlm_ocr(
     content = await file.read()
     tmp = save_upload_to_temp(content, file.filename or "upload.png")
     ocr_options = {
-        "output_format": output_format.strip().lower() or "bbox",
+        "output_format": output_format.strip().lower() or "text_only",
     }
     try:
         return engine.ocr(tmp, ocr_options)
