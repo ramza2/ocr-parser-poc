@@ -95,9 +95,9 @@ Vision Language Model 기반 OCR — 문맥을 이해하는 차세대 문서 AI.
 
 | 엔진 | 모델 | VRAM | 특성 |
 |------|------|------|------|
-| Qwen2.5-VL | Qwen/Qwen2.5-VL-7B-Instruct | ~8GB | 한국어 최강, Schema 추출/Q&A |
-| GOT-OCR 2.0 | stepfun-ai/GOT-OCR-2.0-hf | ~6GB | OCR 특화, 수식/표 |
-| Florence-2 | microsoft/Florence-2-large | ~2GB | 경량, Bounding Box 내장 |
+| Qwen3-VL-2B | Qwen/Qwen3-VL-2B-Instruct | ~4GB | 경량, 빠른 추론 |
+| Qwen3-VL-4B | Qwen/Qwen3-VL-4B-Instruct | ~7GB | 균형 (A4000 16GB 권장) |
+| Qwen3-VL-8B | Qwen/Qwen3-VL-8B-Instruct | ~14GB | 고품질 OCR/Schema/Q&A |
 
 **기능:** 전체 OCR · Schema 기반 Key-Value 추출 · 문서 Q&A · Confidence 시각화 · Bounding Box 오버레이
 

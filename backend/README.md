@@ -124,16 +124,16 @@ CRAFT(텍스트 검출) + Swin-Transformer(문자 인식) 2단계 파이프라�
 
 프리셋 `postprocess_essential`: strip_normalize → format_rules → char_correct
 
-### VLM 엔진 (Qwen2.5-VL, GOT-OCR2.0, Florence-2)
+### VLM 엔진 (Qwen3-VL)
 
 Vision Language Model 기반 OCR/Schema 추출/Q&A 엔진.
 의존성은 `requirements-vlm.txt`. 모델은 최초 실행 시 HuggingFace 에서 자동 다운로드.
 
-| 엔진 | 모델 | VRAM (4-bit) | 특성 |
-|------|------|-------------|------|
-| `qwen_vl` | Qwen2.5-VL-7B-Instruct | ~8GB | 한국어 최강, Schema 추출 우수 |
-| `got_ocr` | GOT-OCR2.0 | ~6GB | OCR 특화, 수식/표 지원 |
-| `florence` | Florence-2-large | ~2GB | 경량, grounding(bbox) 내장 |
+| engine_id | 모델 | VRAM (FP16) | 특성 |
+|-----------|------|-------------|------|
+| `qwen3_vl_2b` | Qwen3-VL-2B-Instruct | ~4GB | 경량, 빠른 추론 |
+| `qwen3_vl_4b` | Qwen3-VL-4B-Instruct | ~7GB | 균형 (A4000 16GB 권장) |
+| `qwen3_vl_8b` | Qwen3-VL-8B-Instruct | ~14GB | 고품질 OCR/Schema/Q&A |
 
 UI 상단의 **VLM** 탭에서 사용. 한 번에 하나의 VLM 모델만 GPU 에 로드됩니다.
 

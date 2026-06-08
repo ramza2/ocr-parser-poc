@@ -1,9 +1,8 @@
 """
-Qwen2.5-VL 엔진 (기본: 2B / 환경변수로 7B 선택 가능).
+Qwen VL 엔진 (Qwen3-VL 2B / 4B / 8B).
 
-한국어/영어/중국어 문서 이해에 강한 VLM.
-- 3B: ~6GB VRAM (RTX 1080 Ti 등 11GB 이하 호환)
-- 7B: ~14GB VRAM (FP16, 24GB+ GPU 권장)
+한국어/영어/중국어 문서 OCR · Schema 추출 · Q&A.
+UI에서 engine_id 로 모델 크기를 선택한다.
 """
 from __future__ import annotations
 
@@ -12,6 +11,7 @@ import logging
 import os
 import re
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 from app.ocr.engines.vlm_base import VlmEngine
@@ -27,25 +27,58 @@ from app.schemas.vlm import (
 
 logger = logging.getLogger(__name__)
 
-_HF_MODEL_DEFAULT = "Qwen/Qwen2.5-VL-3B-Instruct"
-_HF_MODEL_LARGE = "Qwen/Qwen2.5-VL-7B-Instruct"
+@dataclass(frozen=True)
+class QwenVlVariant:
+    engine_id: str
+    name: str
+    hf_model: str
+    vram_gb: float
 
-_VRAM_MAP = {
-    _HF_MODEL_DEFAULT: 6.0,
-    _HF_MODEL_LARGE: 14.0,
-}
+
+# A4000 16GB 기준: 2B·4B 여유, 8B 단일 GPU 가능
+QWEN_VL_VARIANTS: tuple[QwenVlVariant, ...] = (
+    QwenVlVariant(
+        "qwen3_vl_2b",
+        "Qwen3-VL-2B",
+        "Qwen/Qwen3-VL-2B-Instruct",
+        4.0,
+    ),
+    QwenVlVariant(
+        "qwen3_vl_4b",
+        "Qwen3-VL-4B",
+        "Qwen/Qwen3-VL-4B-Instruct",
+        7.0,
+    ),
+    QwenVlVariant(
+        "qwen3_vl_8b",
+        "Qwen3-VL-8B",
+        "Qwen/Qwen3-VL-8B-Instruct",
+        14.0,
+    ),
+)
 
 # processor·smart_resize 공통 (UI 스크린샷·문서용 해상도 상향)
 _MIN_PIXELS = 256 * 28 * 28
 _MAX_PIXELS = 1280 * 28 * 28
 
 
-def _pick_model() -> str:
-    """환경변수 QWEN_VL_MODEL 로 모델 지정 가능. 기본: 3B (11GB VRAM 이하 호환)."""
-    env = os.environ.get("QWEN_VL_MODEL", "").strip()
-    if env:
-        return env
-    return _HF_MODEL_DEFAULT
+def _is_qwen3_model(hf_model: str) -> bool:
+    return "qwen3-vl" in hf_model.lower()
+
+
+def _resolve_model_class(hf_model: str):
+    if _is_qwen3_model(hf_model):
+        from transformers import Qwen3VLForConditionalGeneration
+
+        return Qwen3VLForConditionalGeneration
+    from transformers import Qwen2_5_VLForConditionalGeneration
+
+    return Qwen2_5_VLForConditionalGeneration
+
+
+def create_qwen_engines() -> dict[str, "QwenVlmEngine"]:
+    """등록용 Qwen VL 엔진 인스턴스 (engine_id → 엔진)."""
+    return {v.engine_id: QwenVlmEngine(v) for v in QWEN_VL_VARIANTS}
 
 
 def _pick_device_map(has_gpu: bool):
@@ -64,12 +97,11 @@ def _pick_device_map(has_gpu: bool):
 
 
 class QwenVlmEngine(VlmEngine):
-    engine_id = "qwen_vl"
-    name = "Qwen2.5-VL"
-    model_id = _pick_model()
-    vram_gb = _VRAM_MAP.get(model_id, 4.0)
-
-    def __init__(self) -> None:
+    def __init__(self, variant: QwenVlVariant) -> None:
+        self.engine_id = variant.engine_id
+        self.name = variant.name
+        self.model_id = variant.hf_model
+        self.vram_gb = variant.vram_gb
         self._model = None
         self._processor = None
 
@@ -82,31 +114,33 @@ class QwenVlmEngine(VlmEngine):
         if self._model is not None:
             return
         import torch
-        from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
+        from transformers import AutoProcessor
 
         hf_model = self.model_id
         has_gpu = torch.cuda.is_available()
+        model_cls = _resolve_model_class(hf_model)
 
         device_map = _pick_device_map(has_gpu)
-        load_kwargs: dict = {
-            "torch_dtype": "auto",
-        }
+        load_kwargs: dict = {"dtype": "auto"}
         if has_gpu:
             load_kwargs["device_map"] = device_map
 
-        logger.info("Qwen2.5-VL 로드 시작: %s (device_map=%s)", hf_model, device_map)
+        logger.info(
+            "%s 로드 시작: %s (device_map=%s)",
+            self.name,
+            hf_model,
+            device_map,
+        )
         self._processor = AutoProcessor.from_pretrained(
             hf_model,
             min_pixels=_MIN_PIXELS,
             max_pixels=_MAX_PIXELS,
         )
-        self._model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-            hf_model, **load_kwargs
-        )
+        self._model = model_cls.from_pretrained(hf_model, **load_kwargs)
         self._model.eval()
         if hasattr(self._model, "hf_device_map"):
-            logger.info("Qwen2.5-VL hf_device_map=%s", getattr(self._model, "hf_device_map"))
-        logger.info("Qwen2.5-VL 로드 완료 (%s)", hf_model)
+            logger.info("%s hf_device_map=%s", self.name, getattr(self._model, "hf_device_map"))
+        logger.info("%s 로드 완료 (%s)", self.name, hf_model)
 
     def unload(self) -> None:
         self._model = None

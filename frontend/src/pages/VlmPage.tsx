@@ -77,6 +77,11 @@ export default function VlmPage() {
       .then((res) => {
         setModels(res.models);
         setCurrentLoaded(res.current_model);
+        setSelectedModelId((prev) => {
+          if (prev) return prev;
+          const preferred = res.models.find((m) => m.model_id === "qwen3_vl_4b");
+          return preferred?.model_id ?? res.models[0]?.model_id ?? null;
+        });
       })
       .catch(() => setModels([]));
   }, []);

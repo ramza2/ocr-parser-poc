@@ -84,7 +84,7 @@ class FlorenceVlmEngine(VlmEngine):
         if not loaded:
             raise RuntimeError(
                 "Florence-2 로드 실패: 현재 transformers 버전과 호환되지 않습니다. "
-                "Qwen2.5-VL 또는 GOT-OCR2.0을 사용해 주세요."
+                "Qwen3-VL을 사용해 주세요."
             )
 
         self._model.eval()

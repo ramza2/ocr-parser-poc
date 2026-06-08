@@ -1,8 +1,8 @@
 # VLM 엔진 의존성 — GPU 환경 권장
 # torch 는 기존 requirements 또는 별도 설치 가정
 
-# Qwen2.5-VL — 4.52+ 일부 버전에서 비정상 출력 보고됨
-transformers>=4.49.0,<4.52.0
+# Qwen3-VL (Qwen3VLForConditionalGeneration)
+transformers>=4.57.0
 accelerate>=0.34.0
 qwen-vl-utils>=0.0.8
 Pillow>=10.0.0
