@@ -97,7 +97,7 @@ Vision Language Model 기반 OCR — 문맥을 이해하는 차세대 문서 AI.
 |------|------|------|------|
 | Qwen3-VL-2B | Qwen/Qwen3-VL-2B-Instruct | ~4GB | 경량, 빠른 추론 |
 | Qwen3-VL-4B | Qwen/Qwen3-VL-4B-Instruct | ~7GB | 균형 (A4000 16GB 권장) |
-| Qwen3-VL-8B | Qwen/Qwen3-VL-8B-Instruct | ~14GB | 고품질 OCR/Schema/Q&A |
+| Qwen3-VL-4B-Thinking | Qwen/Qwen3-VL-4B-Thinking | ~8GB | Q&A·표 계산 (단계적 추론) |
 
 **기능:** 전체 OCR · Schema 기반 Key-Value 추출 · 문서 Q&A · Confidence 시각화 · Bounding Box 오버레이
 

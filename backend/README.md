@@ -133,7 +133,7 @@ Vision Language Model 기반 OCR/Schema 추출/Q&A 엔진.
 |-----------|------|-------------|------|
 | `qwen3_vl_2b` | Qwen3-VL-2B-Instruct | ~4GB | 경량, 빠른 추론 |
 | `qwen3_vl_4b` | Qwen3-VL-4B-Instruct | ~7GB | 균형 (A4000 16GB 권장) |
-| `qwen3_vl_8b` | Qwen3-VL-8B-Instruct | ~14GB | 고품질 OCR/Schema/Q&A |
+| `qwen3_vl_4b_thinking` | Qwen3-VL-4B-Thinking | ~8GB | Q&A·표 계산 (단계적 추론) |
 
 UI 상단의 **VLM** 탭에서 사용. 한 번에 하나의 VLM 모델만 GPU 에 로드됩니다.
 

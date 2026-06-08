@@ -1,8 +1,8 @@
 """
-Qwen VL 엔진 (Qwen3-VL 2B / 4B / 8B).
+Qwen VL 엔진 (Qwen3-VL 2B / 4B Instruct / 4B Thinking).
 
 한국어/영어/중국어 문서 OCR · Schema 추출 · Q&A.
-UI에서 engine_id 로 모델 크기를 선택한다.
+UI에서 engine_id 로 모델 크기·Thinking 여부를 선택한다.
 """
 from __future__ import annotations
 
@@ -33,9 +33,10 @@ class QwenVlVariant:
     name: str
     hf_model: str
     vram_gb: float
+    thinking: bool = False
 
 
-# A4000 16GB 기준: 2B·4B 여유, 8B 단일 GPU 가능
+# A4000 16GB 기준: 2B·4B·4B-Thinking (8B는 단일 16GB OOM)
 QWEN_VL_VARIANTS: tuple[QwenVlVariant, ...] = (
     QwenVlVariant(
         "qwen3_vl_2b",
@@ -50,12 +51,16 @@ QWEN_VL_VARIANTS: tuple[QwenVlVariant, ...] = (
         7.0,
     ),
     QwenVlVariant(
-        "qwen3_vl_8b",
-        "Qwen3-VL-8B",
-        "Qwen/Qwen3-VL-8B-Instruct",
-        14.0,
+        "qwen3_vl_4b_thinking",
+        "Qwen3-VL-4B-Thinking",
+        "Qwen/Qwen3-VL-4B-Thinking",
+        8.0,
+        thinking=True,
     ),
 )
+
+_THINKING_START_TAG = "<" + "redacted_thinking>"
+_THINKING_END_TAG = "</" + "redacted_thinking>"
 
 # processor·smart_resize 공통 (UI 스크린샷·문서용 해상도 상향)
 _MIN_PIXELS = 256 * 28 * 28
@@ -102,6 +107,7 @@ class QwenVlmEngine(VlmEngine):
         self.name = variant.name
         self.model_id = variant.hf_model
         self.vram_gb = variant.vram_gb
+        self._thinking = variant.thinking
         self._model = None
         self._processor = None
 
@@ -255,6 +261,34 @@ class QwenVlmEngine(VlmEngine):
             trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
         )[0]
 
+    @staticmethod
+    def _split_thinking_output(text: str, *, thinking_model: bool) -> tuple[str, str]:
+        """Thinking trace와 최종 답변 분리. (thinking, answer) 반환."""
+        if _THINKING_END_TAG in text:
+            thinking, answer = text.split(_THINKING_END_TAG, 1)
+            if _THINKING_START_TAG in thinking:
+                thinking = thinking.split(_THINKING_START_TAG, 1)[-1]
+            return thinking.strip(), answer.strip()
+        if thinking_model:
+            return text.strip(), ""
+        return "", text.strip()
+
+    def _finalize_model_output(self, text: str) -> str:
+        """Thinking 모델이면 추론 블록 제거 후 사용자-facing 텍스트만 반환."""
+        if not self._thinking:
+            return text
+        thinking, answer = self._split_thinking_output(text, thinking_model=True)
+        if thinking:
+            logger.debug("Thinking trace (%d chars)", len(thinking))
+        if answer:
+            return answer
+        if thinking:
+            logger.warning(
+                "Thinking 모델: %s 없이 추론만 생성됨 — max_new_tokens 부족 가능",
+                _THINKING_END_TAG,
+            )
+        return thinking
+
     def _chat(
         self,
         image_path: str,
@@ -267,28 +301,38 @@ class QwenVlmEngine(VlmEngine):
         inputs, processed_size = self._prepare_vlm_inputs(image_path, prompt)
         rep = repetition_penalty if repetition_penalty is not None else 1.05
 
-        text = self._generate_from_inputs(
-            inputs,
-            max_new_tokens=max_new_tokens,
-            repetition_penalty=rep,
-        )
-        if self._is_degenerate_output(text):
-            logger.warning(
-                "VLM 퇴화 출력 감지(! 반복 등) → 샘플링 재시도 (max_tokens=%d)",
-                max_new_tokens,
-            )
+        if self._thinking:
             text = self._generate_from_inputs(
                 inputs,
                 max_new_tokens=max_new_tokens,
                 do_sample=True,
-                temperature=0.2,
-                repetition_penalty=max(rep, 1.12),
+                temperature=0.6,
+                repetition_penalty=rep,
             )
-        if self._is_degenerate_output(text):
-            raise RuntimeError(
-                "모델이 비정상 출력(같은 문자 반복)을 생성했습니다. "
-                "vlm-worker 재시작, transformers 버전(4.49~4.51), GPU 상태를 확인하세요."
+            text = self._finalize_model_output(text)
+        else:
+            text = self._generate_from_inputs(
+                inputs,
+                max_new_tokens=max_new_tokens,
+                repetition_penalty=rep,
             )
+            if self._is_degenerate_output(text):
+                logger.warning(
+                    "VLM 퇴화 출력 감지(! 반복 등) → 샘플링 재시도 (max_tokens=%d)",
+                    max_new_tokens,
+                )
+                text = self._generate_from_inputs(
+                    inputs,
+                    max_new_tokens=max_new_tokens,
+                    do_sample=True,
+                    temperature=0.2,
+                    repetition_penalty=max(rep, 1.12),
+                )
+            if self._is_degenerate_output(text):
+                raise RuntimeError(
+                    "모델이 비정상 출력(같은 문자 반복)을 생성했습니다. "
+                    "vlm-worker 재시작, transformers 버전, GPU 상태를 확인하세요."
+                )
         return text, processed_size
 
     # bbox + JSON 전용 OCR 프롬프트
@@ -357,15 +401,14 @@ class QwenVlmEngine(VlmEngine):
         fmt = str((opts or {}).get("output_format", "text_only")).strip().lower()
         return fmt if fmt in cls._OUTPUT_FORMATS else "text_only"
 
-    @classmethod
-    def _max_new_tokens(cls, output_format: str, task: str) -> int:
+    def _max_new_tokens(self, output_format: str, task: str) -> int:
         if task == "qa":
-            return 512
+            return 2048 if self._thinking else 512
         if output_format == "text_only":
             if task == "schema":
-                return 512
-            return 1024
-        return 1024
+                return 1024 if self._thinking else 512
+            return 1536 if self._thinking else 1024
+        return 1536 if self._thinking else 1024
 
     def _run_ocr(
         self,
