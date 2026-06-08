@@ -1,4 +1,9 @@
 /* VLM 전용 API 클라이언트 */
+import {
+  defaultVlmModelId,
+  filterVlmModels,
+  isDeprecatedVlmModel,
+} from "../constants/vlmModels";
 import type {
   QaResponse,
   SchemaExtractResponse,
@@ -25,8 +30,16 @@ async function parseJsonResponse<T>(res: Response, label: string): Promise<T> {
 export async function fetchVlmModels(): Promise<VlmModelsResponse> {
   const res = await fetch("/api/vlm/models");
   if (!res.ok) throw new Error(`VLM 모델 목록 로드 실패 (HTTP ${res.status})`);
-  return parseJsonResponse<VlmModelsResponse>(res, "VLM 모델 목록");
+  const data = await parseJsonResponse<VlmModelsResponse>(res, "VLM 모델 목록");
+  const models = filterVlmModels(data.models);
+  const current_model =
+    data.current_model && !isDeprecatedVlmModel(data.current_model)
+      ? data.current_model
+      : null;
+  return { models, current_model };
 }
+
+export { defaultVlmModelId };
 
 export async function loadVlmModel(
   modelId: string

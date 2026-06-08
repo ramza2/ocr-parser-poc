@@ -6,10 +6,12 @@
 import { useEffect, useRef, useState } from "react";
 import {
   fetchVlmModels,
+  defaultVlmModelId,
   vlmAsk,
   vlmExtract,
   vlmOcr,
 } from "../api/vlmApi";
+import { isDeprecatedVlmModel } from "../constants/vlmModels";
 import OcrResultView from "../components/vlm/OcrResultView";
 import QaInput from "../components/vlm/QaInput";
 import QaResultView from "../components/vlm/QaResultView";
@@ -78,9 +80,11 @@ export default function VlmPage() {
         setModels(res.models);
         setCurrentLoaded(res.current_model);
         setSelectedModelId((prev) => {
-          if (prev) return prev;
-          const preferred = res.models.find((m) => m.model_id === "qwen3_vl_4b");
-          return preferred?.model_id ?? res.models[0]?.model_id ?? null;
+          if (prev && !isDeprecatedVlmModel(prev)) {
+            const stillAvailable = res.models.some((m) => m.model_id === prev);
+            if (stillAvailable) return prev;
+          }
+          return defaultVlmModelId(res.models);
         });
       })
       .catch(() => setModels([]));

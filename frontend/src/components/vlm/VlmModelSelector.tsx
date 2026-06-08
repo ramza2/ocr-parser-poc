@@ -1,4 +1,5 @@
 import type { VlmModelInfo } from "../../types/vlm";
+import { isThinkingVlmModel } from "../../constants/vlmModels";
 
 interface Props {
   models: VlmModelInfo[];
@@ -43,6 +44,7 @@ export default function VlmModelSelector({
           const selected = m.model_id === selectedModelId;
           const loaded = m.model_id === currentLoaded;
           const level = vramLevel(m.vram_gb);
+          const thinking = isThinkingVlmModel(m.model_id);
           return (
             <button
               key={m.model_id}
@@ -53,7 +55,14 @@ export default function VlmModelSelector({
                 ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
             >
               <div className="min-w-0">
-                <p className="font-medium text-slate-800">{m.name}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-medium text-slate-800">{m.name}</p>
+                  {thinking && (
+                    <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">
+                      Thinking
+                    </span>
+                  )}
+                </div>
                 <p className="mt-0.5 truncate text-xs text-slate-500">
                   {m.description}
                 </p>
