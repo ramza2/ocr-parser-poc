@@ -17,7 +17,6 @@ import SchemaEditor from "../components/vlm/SchemaEditor";
 import SchemaResultView from "../components/vlm/SchemaResultView";
 import VlmModelSelector from "../components/vlm/VlmModelSelector";
 import VlmModeSelector from "../components/vlm/VlmModeSelector";
-import VlmOutputFormatSelector from "../components/vlm/VlmOutputFormatSelector";
 import type {
   QaResponse,
   SchemaExtractResponse,
@@ -28,8 +27,8 @@ import type {
   VlmOutputFormat,
 } from "../types/vlm";
 
-/** OCR은 항상 text_only. Schema/Q&A만 출력 형식 선택 가능 */
-const OCR_OUTPUT_FORMAT: VlmOutputFormat = "text_only";
+/** 모든 모드 공통: 출력 형식은 text_only 고정 */
+const OUTPUT_FORMAT: VlmOutputFormat = "text_only";
 
 type Status = "idle" | "ready" | "loading" | "running" | "done" | "error";
 
@@ -69,7 +68,6 @@ export default function VlmPage() {
   const [ocrResult, setOcrResult] = useState<VlmOcrResponse | null>(null);
   const [schemaResult, setSchemaResult] = useState<SchemaExtractResponse | null>(null);
   const [qaHistory, setQaHistory] = useState<QaEntry[]>([]);
-  const [outputFormat, setOutputFormat] = useState<VlmOutputFormat>("text_only");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -120,7 +118,7 @@ export default function VlmPage() {
     try {
       if (mode === "ocr") {
         const res = await vlmOcr(file, selectedModelId, {
-          outputFormat: OCR_OUTPUT_FORMAT,
+          outputFormat: OUTPUT_FORMAT,
         });
         setOcrResult(res);
         setCurrentLoaded(selectedModelId);
@@ -139,7 +137,7 @@ export default function VlmPage() {
           return;
         }
         const res = await vlmExtract(file, selectedModelId, validSchema, {
-          outputFormat,
+          outputFormat: OUTPUT_FORMAT,
         });
         setSchemaResult(res);
         setCurrentLoaded(selectedModelId);
@@ -162,7 +160,9 @@ export default function VlmPage() {
     setStatus("running");
     setStatusMsg("답변 생성 중...");
     try {
-      const res = await vlmAsk(file, selectedModelId, question, { outputFormat });
+      const res = await vlmAsk(file, selectedModelId, question, {
+        outputFormat: OUTPUT_FORMAT,
+      });
       setCurrentLoaded(selectedModelId);
       setQaHistory((prev) => [...prev, { question, response: res }]);
       setStatus("done");
@@ -241,18 +241,6 @@ export default function VlmPage() {
         </div>
 
         <hr className="border-slate-100" />
-
-        {mode !== "ocr" && (
-          <>
-            <VlmOutputFormatSelector
-              outputFormat={outputFormat}
-              onChange={setOutputFormat}
-              disabled={status === "running"}
-              hideBbox
-            />
-            <hr className="border-slate-100" />
-          </>
-        )}
 
         {/* 모드별 옵션 */}
         {mode === "schema" && (
