@@ -325,12 +325,11 @@ class QwenVlmEngine(VlmEngine):
 
     @classmethod
     def _max_new_tokens(cls, output_format: str, task: str) -> int:
+        if task == "qa":
+            return 512
         if output_format == "text_only":
-            if task == "qa":
-                return 256
             if task == "schema":
                 return 512
-            # OCR text_only: spotting JSON과 동일 (bbox grounding 필요)
             return 1024
         return 1024
 
@@ -620,61 +619,72 @@ class QwenVlmEngine(VlmEngine):
 
     @staticmethod
     def _build_qa_prompt(question: str, *, text_only: bool = False) -> str:
-        """범용 이미지 Q&A 프롬프트."""
+        """범용 이미지 Q&A 프롬프트 (표·계산형 질문 강화)."""
         q = question.strip()
-        base = (
+        return (
             "You are a visual question-answering assistant for images containing "
             "text, signs, documents, screens, objects, and natural scenes.\n\n"
-            "Answer the user's question using only what is visibly supported by "
-            "the image.\n"
+            "Answer the user's question using only:\n\n"
+            "* information visibly supported by the image, and\n"
+            "* explicit conditions provided by the user in the question.\n\n"
             "Reply in the same language as the user's question.\n"
             "Return plain text only unless the user explicitly requests another "
             "format.\n\n"
-            "[Reasoning Policy]\n\n"
-            "* First identify the specific visual target, text span, object, "
-            "region, or relationship referred to by the user's question.\n"
-            "* Then answer only the requested attribute of that target, such as "
-            "its visible text, language, color, location, direction, count, shape, "
-            "or relationship.\n"
-            "* Keep the target as narrow as the question requires. Do not expand "
-            "it to surrounding lines, nearby labels, translations, or the whole "
-            "object unless the user asks for them.\n"
-            "* If the user refers to part of a visible text line or part of an "
-            "object, answer about that part only.\n"
-            "* If the user uses approximate or conversational wording, infer the "
-            "most likely visible referent from the image and answer naturally when "
-            "the referent is clear.\n"
+            "[Target Identification Policy]\n\n"
+            "* First identify the exact visual target, text span, object, table, "
+            "row, column, or relationship referred to by the user's question.\n"
+            "* Keep the target as narrow as the question requires.\n"
+            "* If the question refers to a table, identify the relevant row labels, "
+            "column labels, and cell values before answering.\n"
             "* If two or more visible referents are genuinely plausible and would "
-            "produce different answers, ask one brief clarification question instead "
-            "of guessing.\n\n"
+            "produce different answers, ask one brief clarification question "
+            "instead of guessing.\n\n"
+            "[Table Policy]\n\n"
+            "* For table images, preserve the table structure mentally before "
+            "answering.\n"
+            "* Distinguish row headers, column headers, merged headers, category "
+            "labels, and price/value cells.\n"
+            "* Do not mix values from different rows or columns.\n"
+            "* When a question mentions a category such as adult, student, child, "
+            "private, group, discount, or general ticket, select the cell at the "
+            "intersection of the matching row and column.\n"
+            "* If the user provides a condition such as \"3명 이상이면 단체\", "
+            "apply that condition to choose the matching visible table row, even "
+            "if the condition itself is not written in the image.\n"
+            "* If the user asks about multiple people or multiple categories, "
+            "calculate each category separately and then sum them.\n\n"
+            "[Calculation Policy]\n\n"
+            "* When arithmetic is required, first extract the relevant visible "
+            "values, then apply the user's condition, then calculate.\n"
+            "* For fee, price, count, total, discount, or comparison questions, "
+            "show a short calculation in the final answer.\n"
+            "* Do not silently skip any quantity mentioned by the user.\n"
+            "* If the question includes \"어른 넷 아이 셋\", interpret it as "
+            "4 adults and 3 children.\n"
+            "* If the question says to use group fees, use the Group row for all "
+            "applicable categories unless the image or question clearly says "
+            "otherwise.\n"
+            "* If the required value cannot be read reliably from the image, say "
+            "that it cannot be confirmed clearly.\n\n"
             "[Evidence Policy]\n\n"
-            "* Use only visual evidence present in the image.\n"
-            "* Do not invent, translate, paraphrase, combine, or complete text "
-            "unless the user explicitly asks for translation, interpretation, or "
+            "* Do not invent values that are not visible in the image.\n"
+            "* Do not translate, paraphrase, combine, or complete visible text "
+            "unless the user asks for interpretation, calculation, or "
             "summarization.\n"
-            "* When asked for visible text, preserve the text as shown in the image.\n"
-            "* When asked for a visual property such as color, position, "
-            "orientation, or size, answer only that property for the identified "
-            "target.\n"
-            "* When asked for an exact count or exact measurement, provide a "
-            "result only when it can be determined reliably from the visible "
-            "content; otherwise state briefly that precise confirmation is "
-            "difficult from the image.\n\n"
+            "* When asked for visible text, preserve the text as shown in the "
+            "image.\n"
+            "* When asked for color, position, direction, count, or shape, "
+            "answer only that attribute.\n\n"
             "[Answer Policy]\n\n"
             "* Answer directly and concisely.\n"
-            "* Do not provide the full OCR transcription unless the user explicitly "
-            "asks for it.\n"
-            "* Do not explain your internal reasoning.\n"
+            "* For table calculation questions, include the selected unit prices "
+            "and the final total.\n"
+            "* Do not provide the full OCR transcription unless the user "
+            "explicitly asks for it.\n"
             "* Do not mention unrelated visible content.\n"
-            "* If the answer cannot be confirmed from the image, say so briefly.\n\n"
+            "* Do not include JSON, coordinates, bbox, or markdown.\n\n"
+            f"User question:\n{q}"
         )
-        if text_only:
-            base += (
-                "[Output constraint]\n\n"
-                "* Answer in one or two short sentences when possible.\n"
-                "* Do not include JSON, coordinates, bbox, or markdown.\n\n"
-            )
-        return base + f"User question:\n{q}"
 
     def ask(
         self, image_path: str, question: str, options: dict | None = None
